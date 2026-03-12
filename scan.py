@@ -227,6 +227,8 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
 OPP_API_URL = "https://www.opp.ca/protonapi/entry/list/"
 OPP_NEWS_BASE = "https://www.opp.ca/news/viewnews/"
 
+RCMP_NEWS_URL = "https://rcmp.ca/en/news"
+
 
 def fetch_opp_items(limit: int = 200) -> list[dict]:
     """Fetch press releases from the OPP Proton API."""
@@ -267,6 +269,44 @@ def fetch_opp_items(limit: int = 200) -> list[dict]:
     return results
 
 
+def fetch_rcmp_items() -> list[dict]:
+    """
+    Fetch RCMP news releases from the embedded Drupal JSON on the news page.
+
+    The page embeds all news items as a JSON string in drupalSettings under
+    poweb.all_news.rest_export_all_news. Items include title, URL, date, and type.
+    """
+    import json as _json
+    import re as _re
+
+    resp = requests.get(
+        RCMP_NEWS_URL,
+        timeout=20,
+        headers={"User-Agent": USER_AGENT},
+        verify=False,
+    )
+    resp.raise_for_status()
+    m = _re.search(
+        r'<script type="application/json" data-drupal-selector="drupal-settings-json">(.*?)</script>',
+        resp.text,
+        _re.DOTALL,
+    )
+    if not m:
+        raise ValueError("Could not find Drupal settings JSON on RCMP news page")
+    settings = _json.loads(m.group(1))
+    raw = settings["poweb"]["all_news"]["rest_export_all_news"]
+    entries = _json.loads(raw)
+    results = []
+    for entry in entries:
+        title = entry.get("title", "").strip()
+        url = entry.get("view_node", "").strip()
+        date_str = entry.get("created", "")[:10] or None
+        if not title or not url or url == "#":
+            continue
+        results.append({"title": title, "url": url, "date": date_str})
+    return results
+
+
 def scrape_site(
     service_name: str,
     url: str,
@@ -280,9 +320,11 @@ def scrape_site(
     Each item is {title, url, date, service_name}.
     """
     try:
-        # OPP uses a JSON API rather than a scrapeable HTML page
+        # Special cases: sites that require custom fetching
         if "opp.ca" in url:
             raw_links = fetch_opp_items()
+        elif "rcmp.ca" in url:
+            raw_links = fetch_rcmp_items()
         else:
             resp = requests.get(
                 url,
