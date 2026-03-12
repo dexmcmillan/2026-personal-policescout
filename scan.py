@@ -62,7 +62,7 @@ def prune_state(state: dict, today: date) -> dict:
 
 
 def load_sources() -> list[dict]:
-    """Read sources.csv and return list of {name, url} dicts."""
+    """Read sources.csv and return list of source dicts."""
     sources = []
     with open(SOURCES_FILE, encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
@@ -70,7 +70,12 @@ def load_sources() -> list[dict]:
             name = row["Name of police service"].strip()
             url = row["url"].strip()
             if name and url:
-                sources.append({"name": name, "url": url})
+                sources.append({
+                    "name": name,
+                    "url": url,
+                    "link_selector": row.get("link_selector", "").strip(),
+                    "date_selector": row.get("date_selector", "").strip(),
+                })
     return sources
 
 
@@ -94,9 +99,74 @@ def is_press_release_url(url: str) -> bool:
     return any(kw in path for kw in PRESS_RELEASE_KEYWORDS)
 
 
+def extract_date_near(anchor: BeautifulSoup, date_selector: str) -> str | None:
+    """
+    Try to extract a date string near a link element.
+
+    If date_selector is 'time', look for a <time> element in the ancestor chain.
+    If date_selector starts with '.', look for that class in ancestor containers.
+    Returns a stripped string or None.
+    """
+    if not date_selector:
+        return None
+
+    node = anchor.parent
+    for _ in range(5):
+        if node is None:
+            break
+        if date_selector == "time":
+            t = node.find("time")
+            if t:
+                text = t.get("datetime", "").strip() or t.get_text(strip=True)
+                if text:
+                    return text[:40]
+        else:
+            el = node.select_one(date_selector)
+            if el:
+                text = el.get_text(separator=" ", strip=True)
+                # Strip author prefixes like "By Brandon Police Service-Mar 12, 2026"
+                if "-" in text:
+                    text = text.split("-")[-1].strip()
+                # Strip time/timezone noise like "12 March 2026 | 11:47 America/Denver"
+                if "|" in text:
+                    text = text.split("|")[0].strip()
+                if text:
+                    return text[:40]
+        node = node.parent
+    return None
+
+
+def extract_links_by_selector(
+    soup: BeautifulSoup,
+    base_url: str,
+    link_selector: str,
+    date_selector: str,
+) -> list[dict]:
+    """Extract links using a specific CSS selector."""
+    results = []
+    seen_urls = set()
+    for a in soup.select(link_selector):
+        href = a.get("href", "")
+        if not href or href.startswith("#") or href.startswith("mailto:") or href.startswith("tel:"):
+            continue
+        title = a.get_text(strip=True)
+        if not title:
+            # Try aria-label for anchor-wrapping patterns (e.g. ppUnit)
+            title = a.get("aria-label", "").strip()
+        if not title:
+            continue
+        absolute_url = urljoin(base_url, href)
+        if absolute_url in seen_urls:
+            continue
+        seen_urls.add(absolute_url)
+        date_str = extract_date_near(a, date_selector)
+        results.append({"title": title, "url": absolute_url, "date": date_str})
+    return results
+
+
 def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
     """
-    Extract press release links from a parsed page.
+    Heuristic link extraction fallback.
 
     Step A: links inside <main>, <article>, <ul>, <ol>, <table>.
     Step B (fallback): all links on page, excluding <nav>, <footer>, <header>.
@@ -114,6 +184,7 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
 
     def collect_from_tags(tags) -> list[dict]:
         results = []
+        seen_urls = set()
         for a in tags:
             href = a.get("href", "")
             if not is_valid_href(href):
@@ -122,7 +193,10 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
             if not title:
                 continue
             absolute_url = urljoin(base_url, href) if href.startswith("/") else href
-            results.append({"title": title, "url": absolute_url})
+            if absolute_url in seen_urls:
+                continue
+            seen_urls.add(absolute_url)
+            results.append({"title": title, "url": absolute_url, "date": None})
         return results
 
     # Step A: preferred containers
@@ -150,12 +224,17 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
     return [lnk for lnk in links if is_press_release_url(lnk["url"])]
 
 
-def scrape_site(service_name: str, url: str) -> tuple[list[dict], str | None]:
+def scrape_site(
+    service_name: str,
+    url: str,
+    link_selector: str = "",
+    date_selector: str = "",
+) -> tuple[list[dict], str | None]:
     """
     Scrape a police service listing page.
 
     Returns (items, error_message). On success, error_message is None.
-    Each item is {title, url, service_name}.
+    Each item is {title, url, date, service_name}.
     """
     try:
         resp = requests.get(
@@ -166,9 +245,19 @@ def scrape_site(service_name: str, url: str) -> tuple[list[dict], str | None]:
         )
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
-        raw_links = extract_links(soup, url)
+
+        if link_selector:
+            raw_links = extract_links_by_selector(soup, url, link_selector, date_selector)
+        else:
+            raw_links = extract_links(soup, url)
+
         items = [
-            {"title": lnk["title"], "url": lnk["url"], "service_name": service_name}
+            {
+                "title": lnk["title"],
+                "url": lnk["url"],
+                "date": lnk.get("date"),
+                "service_name": service_name,
+            }
             for lnk in raw_links
         ]
         return items, None
@@ -229,7 +318,12 @@ def main():
 
     for source in sources:
         print(f"  Scraping {source['name']}...", end=" ")
-        items, error = scrape_site(source["name"], source["url"])
+        items, error = scrape_site(
+            source["name"],
+            source["url"],
+            link_selector=source["link_selector"],
+            date_selector=source["date_selector"],
+        )
         if error:
             print(f"FAILED: {error}")
             failed_services.append(source["name"])
@@ -249,7 +343,7 @@ def main():
     services_map: dict[str, list] = {}
     for item in all_new_items:
         services_map.setdefault(item["service_name"], []).append(
-            {"title": item["title"], "url": item["url"]}
+            {"title": item["title"], "url": item["url"], "date": item.get("date")}
         )
     services_list = [
         {"name": name, "items": items}
