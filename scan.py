@@ -307,6 +307,42 @@ def fetch_rcmp_items() -> list[dict]:
     return results
 
 
+def extract_links_title_from_heading(
+    soup: BeautifulSoup,
+    base_url: str,
+    item_selector: str,
+    date_selector: str = "",
+) -> list[dict]:
+    """
+    Extract links from pages where each item is a container with a heading (title)
+    and a separate 'Read more' anchor (href). Used for Amherst-style Joomla pages.
+
+    For each element matching item_selector:
+    - Title comes from the first <h2> or <h3> inside it
+    - URL comes from the first <a href> inside it
+    - Date comes from a <time datetime="..."> attribute if present
+    """
+    results = []
+    seen_urls = set()
+    for item in soup.select(item_selector):
+        heading = item.find(["h2", "h3"])
+        title = heading.get_text(strip=True) if heading else ""
+        a = item.find("a", href=True)
+        href = a.get("href", "") if a else ""
+        if not title or not href or href.startswith("#") or href.startswith("mailto:"):
+            continue
+        absolute_url = urljoin(base_url, href)
+        if absolute_url in seen_urls:
+            continue
+        seen_urls.add(absolute_url)
+        date_str = None
+        time_el = item.find("time")
+        if time_el:
+            date_str = (time_el.get("datetime", "")[:10] or time_el.get_text(strip=True)[:40]) or None
+        results.append({"title": title, "url": absolute_url, "date": date_str})
+    return results
+
+
 def scrape_site(
     service_name: str,
     url: str,
@@ -335,7 +371,10 @@ def scrape_site(
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
 
-            if link_selector:
+            if link_selector.startswith("HEADING:"):
+                item_selector = link_selector[len("HEADING:"):]
+                raw_links = extract_links_title_from_heading(soup, url, item_selector, date_selector)
+            elif link_selector:
                 raw_links = extract_links_by_selector(soup, url, link_selector, date_selector)
             else:
                 raw_links = extract_links(soup, url)
