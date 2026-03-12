@@ -323,18 +323,20 @@ def extract_links_title_from_heading(
     - Date comes from a <time datetime="..."> attribute if present
     """
     results = []
-    seen_urls = set()
+    seen_titles = set()
     for item in soup.select(item_selector):
         heading = item.find(["h2", "h3"])
         title = heading.get_text(strip=True) if heading else ""
+        if not title or title in seen_titles:
+            continue
+        seen_titles.add(title)
         a = item.find("a", href=True)
         href = a.get("href", "") if a else ""
-        if not title or not href or href.startswith("#") or href.startswith("mailto:"):
-            continue
-        absolute_url = urljoin(base_url, href)
-        if absolute_url in seen_urls:
-            continue
-        seen_urls.add(absolute_url)
+        if href and not href.startswith("#") and not href.startswith("mailto:"):
+            absolute_url = urljoin(base_url, href)
+        else:
+            # No usable link — fall back to the listing page itself
+            absolute_url = base_url
         date_str = None
         time_el = item.find("time")
         if time_el:
