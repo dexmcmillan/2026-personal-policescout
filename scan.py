@@ -12,8 +12,11 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 from jinja2 import Environment, FileSystemLoader
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- Paths ---
 
@@ -159,6 +162,7 @@ def scrape_site(service_name: str, url: str) -> tuple[list[dict], str | None]:
             url,
             timeout=15,
             headers={"User-Agent": USER_AGENT},
+            verify=False,
         )
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
