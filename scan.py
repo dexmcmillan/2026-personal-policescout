@@ -9,7 +9,7 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -71,6 +71,26 @@ def load_sources() -> list[dict]:
     return sources
 
 
+PRESS_RELEASE_KEYWORDS = (
+    "news",
+    "release",
+    "media",
+    "press",
+    "newsroom",
+    "communique",
+    "bulletin",
+    "update",
+    "notice",
+    "alert",
+)
+
+
+def is_press_release_url(url: str) -> bool:
+    """Return True if the URL path contains at least one press-release keyword."""
+    path = urlparse(url).path.lower()
+    return any(kw in path for kw in PRESS_RELEASE_KEYWORDS)
+
+
 def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
     """
     Extract press release links from a parsed page.
@@ -80,6 +100,8 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
 
     Only links with href starting with http, https, or / and non-empty
     stripped text are included. Relative URLs are resolved to absolute.
+    Links are further filtered to those whose URL path contains at least
+    one press-release-style keyword (news, release, media, press, etc.).
     """
 
     def is_valid_href(href: str | None) -> bool:
@@ -112,17 +134,17 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
 
     links = collect_from_tags(preferred_tags)
 
-    if links:
-        return links
+    if not links:
+        # Step B: whole page minus nav/footer/header
+        excluded = set()
+        for tag_name in ("nav", "footer", "header"):
+            for el in soup.find_all(tag_name):
+                excluded.update(el.find_all("a"))
 
-    # Step B: whole page minus nav/footer/header
-    excluded = set()
-    for tag_name in ("nav", "footer", "header"):
-        for el in soup.find_all(tag_name):
-            excluded.update(el.find_all("a"))
+        all_anchors = [a for a in soup.find_all("a") if a not in excluded]
+        links = collect_from_tags(all_anchors)
 
-    all_anchors = [a for a in soup.find_all("a") if a not in excluded]
-    return collect_from_tags(all_anchors)
+    return [lnk for lnk in links if is_press_release_url(lnk["url"])]
 
 
 def scrape_site(service_name: str, url: str) -> tuple[list[dict], str | None]:

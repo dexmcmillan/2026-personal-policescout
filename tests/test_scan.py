@@ -67,6 +67,30 @@ def test_prune_state_empty_input():
     assert result == {}
 
 
+# --- is_press_release_url ---
+
+def test_is_press_release_url_matches_news():
+    assert scan.is_press_release_url("https://police.ca/news/some-release") is True
+
+def test_is_press_release_url_matches_release():
+    assert scan.is_press_release_url("https://police.ca/media-releases/2026-01") is True
+
+def test_is_press_release_url_matches_newsroom():
+    assert scan.is_press_release_url("https://police.ca/newsroom/") is True
+
+def test_is_press_release_url_rejects_homepage():
+    assert scan.is_press_release_url("https://police.ca/") is False
+
+def test_is_press_release_url_rejects_about():
+    assert scan.is_press_release_url("https://police.ca/about-us") is False
+
+def test_is_press_release_url_rejects_contact():
+    assert scan.is_press_release_url("https://police.ca/contact") is False
+
+def test_is_press_release_url_case_insensitive():
+    assert scan.is_press_release_url("https://police.ca/News/Release-1") is True
+
+
 # --- extract_links ---
 
 def test_extract_links_prefers_main_content():
@@ -109,7 +133,7 @@ def test_extract_links_excludes_invalid_hrefs():
         <li><a href="mailto:info@police.ca">Email</a></li>
         <li><a href="tel:+15551234567">Phone</a></li>
         <li><a href="javascript:void(0)">JS</a></li>
-        <li><a href="https://example.com/valid">Valid</a></li>
+        <li><a href="https://example.com/news/valid">Valid Release</a></li>
       </ul>
     </main>
     """
@@ -117,7 +141,7 @@ def test_extract_links_excludes_invalid_hrefs():
     soup = BeautifulSoup(html, "html.parser")
     links = scan.extract_links(soup, "https://example.com/")
     assert len(links) == 1
-    assert links[0]["url"] == "https://example.com/valid"
+    assert links[0]["url"] == "https://example.com/news/valid"
 
 def test_extract_links_excludes_empty_text():
     html = """
@@ -152,10 +176,26 @@ def test_extract_links_fallback_when_no_main_content():
     for u in urls:
         assert u not in ("https://example.com/nav", "https://example.com/head", "https://example.com/foot")
 
+def test_extract_links_filters_non_press_release_urls():
+    html = """
+    <main><ul>
+      <li><a href="https://example.com/about-us">About Us</a></li>
+      <li><a href="https://example.com/contact">Contact</a></li>
+      <li><a href="https://example.com/news/2026-arrest">Arrest Notice</a></li>
+      <li><a href="https://example.com/recruitment">Join Us</a></li>
+    </ul></main>
+    """
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    links = scan.extract_links(soup, "https://example.com/")
+    urls = [l["url"] for l in links]
+    # Only the news link should survive the keyword filter
+    assert urls == ["https://example.com/news/2026-arrest"]
+
 def test_extract_links_uses_stripped_title():
     html = """
     <main><ul>
-      <li><a href="https://example.com/1">  Spaced Title  </a></li>
+      <li><a href="https://example.com/news/1">  Spaced Title  </a></li>
     </ul></main>
     """
     from bs4 import BeautifulSoup
