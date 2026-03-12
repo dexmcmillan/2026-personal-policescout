@@ -224,6 +224,49 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
     return [lnk for lnk in links if is_press_release_url(lnk["url"])]
 
 
+OPP_API_URL = "https://www.opp.ca/protonapi/entry/list/"
+OPP_NEWS_BASE = "https://www.opp.ca/news/viewnews/"
+
+
+def fetch_opp_items(limit: int = 200) -> list[dict]:
+    """Fetch press releases from the OPP Proton API."""
+    import json as _json
+
+    payload = {
+        "returnData": _json.dumps({
+            "data.title": "1",
+            "data.displaydate": "1",
+            "data.category": "1",
+        }),
+        "findData": _json.dumps({"template.name": "General News"}),
+        "limit": limit,
+        "skip": 0,
+    }
+    resp = requests.post(
+        OPP_API_URL,
+        json=payload,
+        timeout=20,
+        headers={"User-Agent": USER_AGENT},
+        verify=False,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    results = []
+    for entry in data:
+        entry_id = entry.get("id", "")
+        d = entry.get("data", {})
+        title = d.get("title", "").strip()
+        date_str = d.get("displaydate", "")[:10] or None
+        if not entry_id or not title:
+            continue
+        results.append({
+            "title": title,
+            "url": OPP_NEWS_BASE + entry_id,
+            "date": date_str,
+        })
+    return results
+
+
 def scrape_site(
     service_name: str,
     url: str,
@@ -237,19 +280,23 @@ def scrape_site(
     Each item is {title, url, date, service_name}.
     """
     try:
-        resp = requests.get(
-            url,
-            timeout=15,
-            headers={"User-Agent": USER_AGENT},
-            verify=False,
-        )
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        if link_selector:
-            raw_links = extract_links_by_selector(soup, url, link_selector, date_selector)
+        # OPP uses a JSON API rather than a scrapeable HTML page
+        if "opp.ca" in url:
+            raw_links = fetch_opp_items()
         else:
-            raw_links = extract_links(soup, url)
+            resp = requests.get(
+                url,
+                timeout=15,
+                headers={"User-Agent": USER_AGENT},
+                verify=False,
+            )
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            if link_selector:
+                raw_links = extract_links_by_selector(soup, url, link_selector, date_selector)
+            else:
+                raw_links = extract_links(soup, url)
 
         items = [
             {
