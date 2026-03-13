@@ -388,7 +388,7 @@ def scrape_site(
                 "date": lnk.get("date"),
                 "service_name": service_name,
             }
-            for lnk in raw_links
+            for lnk in raw_links[:10]
         ]
         return items, None
     except Exception as e:

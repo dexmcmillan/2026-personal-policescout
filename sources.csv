@@ -3,7 +3,7 @@ Abbotsford Police Department,https://www.abbypd.ca/blog/news_releases,a.blog-pos
 Akwesasne Mohawk Police Service,https://akwesasnepolice.ca/news-and-updates/,article h2 a,time
 Altona Police Service,https://altona.ca/m/altona-police-service/local-notices,ul.notices a,time
 Amherst Police Department,https://www.amherst.ca/town-news/media-releases/,HEADING:div.blog-item,
-Amherstburg Police Service,https://windsorpolice.ca/newsroom/,,
+Amherstburg Police Service,https://windsorpolice.ca/newsroom/,HEADING:div.search-result,
 Anishinabek Police Service,https://www.anishinabekpolice.ca/,li.post-card h2 a,
 Annapolis Royal Police Department,https://annapolisroyal.com/police/,,
 Aylmer Police,https://www.aylmerpolice.com/events,,
