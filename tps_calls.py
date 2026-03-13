@@ -14,9 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 FEATURE_URL = (
     "https://services.arcgis.com/S9th0jAJ7bqgIRjw/arcgis/rest/services"
@@ -44,15 +41,25 @@ def fetch_features() -> list[dict]:
         "resultRecordCount": 2000,
         "f": "json",
     }
-    resp = requests.get(
-        FEATURE_URL,
-        params=params,
-        headers={"User-Agent": USER_AGENT},
-        timeout=20,
-        verify=False,
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    try:
+        resp = requests.get(
+            FEATURE_URL,
+            params=params,
+            headers={"User-Agent": USER_AGENT},
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.Timeout:
+        print("ERROR: Request timed out")
+        return []
+    except requests.RequestException as e:
+        print(f"ERROR: Failed to fetch data: {e}")
+        return []
+    try:
+        data = resp.json()
+    except Exception as e:
+        print(f"ERROR: Invalid JSON response: {e}")
+        return []
     return [feat["attributes"] for feat in data.get("features", [])]
 
 
@@ -81,7 +88,11 @@ def load_seen(path: Path) -> set[int]:
     """Load the set of already-logged OBJECTIDs from disk."""
     if not path.exists():
         return set()
-    return set(json.loads(path.read_text(encoding="utf-8")))
+    try:
+        return set(json.loads(path.read_text(encoding="utf-8")))
+    except Exception as e:
+        print(f"WARNING: Could not read seen file ({e}), starting fresh")
+        return set()
 
 
 def save_seen(seen: set[int], path: Path) -> None:

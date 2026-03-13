@@ -3,7 +3,7 @@ import json
 import pytest
 from pathlib import Path
 
-from tps_calls import parse_feature, load_seen, save_seen
+from tps_calls import parse_feature, load_seen, save_seen, append_records
 
 
 def test_parse_feature_converts_timestamp():
@@ -54,3 +54,22 @@ def test_save_and_load_seen(tmp_path):
     p = tmp_path / "seen.json"
     save_seen({1, 2, 3}, p)
     assert load_seen(p) == {1, 2, 3}
+
+
+def test_append_records_creates_valid_ndjson(tmp_path):
+    from tps_calls import append_records
+    log = tmp_path / "test.ndjson"
+    records = [{"id": 1, "call_type": "ASSAULT"}, {"id": 2, "call_type": "FRAUD"}]
+    append_records(records, log)
+    lines = log.read_text(encoding="utf-8").strip().split("\n")
+    assert len(lines) == 2
+    assert json.loads(lines[0])["id"] == 1
+    assert json.loads(lines[1])["id"] == 2
+
+
+def test_load_seen_handles_corrupt_file(tmp_path):
+    p = tmp_path / "seen.json"
+    p.write_text("not valid json", encoding="utf-8")
+    # Should not raise, should return empty set
+    result = load_seen(p)
+    assert result == set()
