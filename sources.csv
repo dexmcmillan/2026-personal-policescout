@@ -31,5 +31,5 @@ Halton Regional Police Service,https://www.haltonpolice.ca/news-releases/,a.gs-f
 Hamilton Police Service,https://hamiltonpolice.on.ca/news/,a.ppUnit,.pp-newsreel-list__date
 Nishnawbe-Aski Police Service,https://www.naps.ca/news/,.post-title a,
 Ontario Provincial Police,https://www.opp.ca/news/,,
-Ottawa Police Service,https://www.ottawapolice.ca/modules/news/en,h2 a[href*="news"],.field-content
+Ottawa Police Service,https://ottawapolice.news.esolg.ca/,a.newsTitle,.blogPostDate
 RCMP,https://rcmp.ca/en/news,,

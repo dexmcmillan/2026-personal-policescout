@@ -130,6 +130,11 @@ def extract_date_near(anchor: BeautifulSoup, date_selector: str) -> str | None:
                 # Strip time/timezone noise like "12 March 2026 | 11:47 America/Denver"
                 if "|" in text:
                     text = text.split("|")[0].strip()
+                # Strip verbose prefix like "Posted on Friday, March 13, 2026 09:35 AM"
+                import re as _re
+                m = _re.search(r"(\w+ \d{1,2},\s*\d{4})", text)
+                if m:
+                    text = m.group(1)
                 if text:
                     return text[:40]
         node = node.parent
