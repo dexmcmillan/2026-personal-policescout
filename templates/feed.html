@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Police Scout</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 16px 20px 12px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header .updated {
+      font-size: 0.78rem;
+      color: #aaa;
+      margin-top: 2px;
+    }
+
+    .controls {
+      max-width: 800px;
+      margin: 16px auto 12px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #search {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+      background: #fff;
+    }
+
+    #search:focus {
+      border-color: #4a90d9;
+      box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.25);
+    }
+
+    #count {
+      font-size: 0.82rem;
+      color: #666;
+      white-space: nowrap;
+    }
+
+    #feed {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 12px 40px;
+    }
+
+    .card {
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+    }
+
+    .card-pr {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+    }
+
+    .card-tps {
+      background: #eef3f8;
+      border: 1px solid #c8d8e8;
+    }
+
+    .card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .card-source {
+      font-size: 0.78rem;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .card-time {
+      font-size: 0.78rem;
+      color: #888;
+      white-space: nowrap;
+    }
+
+    .card-title {
+      font-size: 0.97rem;
+      font-weight: 600;
+    }
+
+    .card-title a {
+      color: #1a1a8e;
+      text-decoration: none;
+    }
+
+    .card-title a:hover {
+      text-decoration: underline;
+    }
+
+    .card-location {
+      font-size: 0.82rem;
+      color: #666;
+      margin-top: 3px;
+    }
+
+    .card-type-tps .card-title {
+      color: #1a3a5e;
+    }
+
+    #loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    #error {
+      text-align: center;
+      padding: 40px;
+      color: #c00;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Police Scout</h1>
+    <p class="updated">Updated: {{ generated_at }}</p>
+  </header>
+  <div class="controls">
+    <input type="search" id="search" placeholder="Search releases and calls…" autofocus>
+    <span id="count"></span>
+  </div>
+  <div id="feed">
+    <div id="loading">Loading…</div>
+  </div>
+
+  <script>
+    (function () {
+      var allItems = [];
+
+      // --- Time formatting ---
+      function formatTime(isoStr) {
+        // isoStr: "2026-03-13T15:18:56+00:00"
+        var d = new Date(isoStr);
+        var now = new Date();
+        // Compare calendar dates in UTC
+        var dDate = d.toISOString().slice(0, 10);
+        var todayDate = now.toISOString().slice(0, 10);
+        var yd = new Date(now);
+        yd.setUTCDate(yd.getUTCDate() - 1);
+        var yesterdayDate = yd.toISOString().slice(0, 10);
+
+        var hh = d.getUTCHours();
+        var mm = d.getUTCMinutes();
+        var ampm = hh >= 12 ? 'PM' : 'AM';
+        var h12 = hh % 12 || 12;
+        var mStr = mm < 10 ? '0' + mm : String(mm);
+        var timeStr = h12 + ':' + mStr + ' ' + ampm;
+
+        if (dDate === todayDate) return timeStr + ' today';
+        if (dDate === yesterdayDate) return 'yesterday ' + timeStr;
+
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return months[d.getUTCMonth()] + ' ' + d.getUTCDate() + ' at ' + timeStr;
+      }
+
+      // Format date-only string "2026-03-13" -> "Mar 13, 2026"
+      function formatDate(isoDate) {
+        if (!isoDate) return '';
+        var parts = isoDate.split('-');
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return months[parseInt(parts[1], 10) - 1] + ' ' + parseInt(parts[2], 10) + ', ' + parts[0];
+      }
+
+      // --- Card rendering ---
+      function renderCard(item) {
+        var div = document.createElement('div');
+
+        if (item.type === 'press_release') {
+          div.className = 'card card-pr';
+          div.innerHTML =
+            '<div class="card-meta">' +
+              '<span class="card-source">' + esc(item.source) + '</span>' +
+              '<span class="card-time">' + esc(formatDate(item.date)) + '</span>' +
+            '</div>' +
+            '<div class="card-title">' +
+              (item.url
+                ? '<a href="' + esc(item.url) + '" target="_blank" rel="noopener">' + esc(item.title) + ' →</a>'
+                : esc(item.title)) +
+            '</div>';
+        } else {
+          // tps_call
+          div.className = 'card card-tps card-type-tps';
+          var divText = item.division ? 'TPS · ' + item.division : 'TPS';
+          var timeText = item.occurred_at ? formatTime(item.occurred_at) : formatDate(item.date);
+          div.innerHTML =
+            '<div class="card-meta">' +
+              '<span class="card-source">' + esc(divText) + '</span>' +
+              '<span class="card-time">' + esc(timeText) + '</span>' +
+            '</div>' +
+            '<div class="card-title">' + esc(item.title) + '</div>' +
+            (item.cross_streets
+              ? '<div class="card-location">' + esc(item.cross_streets) + '</div>'
+              : '');
+        }
+
+        return div;
+      }
+
+      function esc(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      // --- Render visible cards ---
+      function renderFeed(query) {
+        var feed = document.getElementById('feed');
+        feed.innerHTML = '';
+        var q = query ? query.toLowerCase().trim() : '';
+        var visible = 0;
+
+        for (var i = 0; i < allItems.length; i++) {
+          var item = allItems[i];
+          var show = !q || item.search_text.indexOf(q) !== -1;
+          if (show) {
+            feed.appendChild(renderCard(item));
+            visible++;
+          }
+        }
+
+        var countEl = document.getElementById('count');
+        if (q) {
+          countEl.textContent = 'Showing ' + visible + ' of ' + allItems.length;
+        } else {
+          countEl.textContent = allItems.length + ' items';
+        }
+
+        if (visible === 0) {
+          var empty = document.createElement('p');
+          empty.style.color = '#666';
+          empty.style.padding = '20px 0';
+          empty.textContent = 'No results for "' + query + '"';
+          feed.appendChild(empty);
+        }
+      }
+
+      // --- Live search ---
+      document.getElementById('search').addEventListener('input', function () {
+        renderFeed(this.value);
+      });
+
+      // --- Load data ---
+      fetch('data.json')
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          allItems = data;
+          renderFeed('');
+        })
+        .catch(function (err) {
+          document.getElementById('feed').innerHTML =
+            '<div id="error">Failed to load data: ' + esc(String(err)) + '</div>';
+        });
+    })();
+  </script>
+</body>
+</html>
