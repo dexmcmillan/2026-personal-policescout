@@ -204,40 +204,6 @@ def test_extract_links_uses_stripped_title():
     assert links[0]["title"] == "Spaced Title"
 
 
-# --- get_archive_links ---
-
-def test_get_archive_links_returns_30_most_recent(tmp_path):
-    archive_dir = tmp_path / "archive"
-    archive_dir.mkdir()
-    # Create 35 fake archive files
-    for i in range(35):
-        d = date(2026, 1, 1) + timedelta(days=i)
-        (archive_dir / f"{d.isoformat()}.html").write_text("")
-    links = scan.get_archive_links(archive_dir)
-    assert len(links) == 30
-    # Most recent first
-    assert links[0]["date"] == "2026-02-04"  # day 34
-    assert links[-1]["date"] == "2026-01-06"  # day 5
-
-def test_get_archive_links_filename_is_relative_path(tmp_path):
-    archive_dir = tmp_path / "archive"
-    archive_dir.mkdir()
-    (archive_dir / "2026-03-12.html").write_text("")
-    links = scan.get_archive_links(archive_dir)
-    assert links[0]["filename"] == "archive/2026-03-12.html"
-
-def test_get_archive_links_empty_dir(tmp_path):
-    archive_dir = tmp_path / "archive"
-    archive_dir.mkdir()
-    links = scan.get_archive_links(archive_dir)
-    assert links == []
-
-def test_get_archive_links_missing_dir(tmp_path):
-    archive_dir = tmp_path / "archive"  # does not exist
-    links = scan.get_archive_links(archive_dir)
-    assert links == []
-
-
 # --- normalize_date ---
 
 def test_normalize_date_iso():

@@ -23,7 +23,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DOCS_DIR = BASE_DIR / "docs"
-ARCHIVE_DIR = DOCS_DIR / "archive"
 TEMPLATE_DIR = BASE_DIR / "templates"
 STATE_FILE = DATA_DIR / "seen_items.json"
 SOURCES_FILE = BASE_DIR / "sources.csv"
@@ -423,39 +422,6 @@ def scrape_site(
         return [], str(e)
 
 
-def get_archive_links(archive_dir: Path) -> list[dict]:
-    """
-    Return up to 30 most recent archive files as [{date, filename}].
-    date is the ISO filename stem; filename is relative from docs/.
-    """
-    if not archive_dir.exists():
-        return []
-    files = sorted(archive_dir.glob("*.html"), key=lambda f: f.stem, reverse=True)
-    return [
-        {"date": f.stem, "filename": f"archive/{f.name}"}
-        for f in files[:30]
-    ]
-
-
-def render_digest(
-    today_utc: date,
-    services: list[dict],
-    failed: list[str],
-    archive_links: list[dict],
-) -> str:
-    """Render the Jinja2 digest template and return HTML string."""
-    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
-    template = env.get_template("digest.html")
-    date_str = today_utc.strftime("%A, %B %-d, %Y")
-    return template.render(
-        date_str=date_str,
-        services=services,
-        failed=failed,
-        archive_links=archive_links,
-    )
-
-
-
 # --- Feed builder ---
 
 
@@ -638,24 +604,6 @@ def main():
         for name, items in sorted(services_map.items())
     ]
 
-    # Ensure archive dir exists
-    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-    DOCS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Touch today's archive file before calling get_archive_links so it appears
-    # as the first entry in the rendered footer (spec requirement).
-    archive_path = ARCHIVE_DIR / f"{today_utc}.html"
-    if not archive_path.exists():
-        archive_path.write_text("", encoding="utf-8")
-
-    archive_links = get_archive_links(ARCHIVE_DIR)
-    html = render_digest(today_utc, services_list, failed_services, archive_links)
-
-    index_path = DOCS_DIR / "index.html"
-    index_path.write_text(html, encoding="utf-8")
-    archive_path.write_text(html, encoding="utf-8")
-    print(f"Wrote docs/index.html and docs/archive/{today_utc}.html")
-
     # Update state: prune first, then merge new hashes
     state = prune_state(state, today_utc)
     now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -665,6 +613,14 @@ def main():
             state[h] = now_ts
     save_state(state)
     print(f"State saved: {len(state)} items")
+
+    # Build the card feed
+    build_feed(
+        archive_dir=DATA_DIR / "archive",
+        tps_ndjson=DATA_DIR / "tps_calls.ndjson",
+        output_dir=DOCS_DIR,
+        days=7,
+    )
     print("Done.")
 
 
