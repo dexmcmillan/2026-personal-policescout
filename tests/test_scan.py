@@ -236,3 +236,24 @@ def test_get_archive_links_missing_dir(tmp_path):
     archive_dir = tmp_path / "archive"  # does not exist
     links = scan.get_archive_links(archive_dir)
     assert links == []
+
+
+# --- normalize_date ---
+
+def test_normalize_date_iso():
+    assert scan.normalize_date("2026-03-13") == "2026-03-13"
+
+def test_normalize_date_long_month():
+    assert scan.normalize_date("March 13, 2026") == "2026-03-13"
+
+def test_normalize_date_short_month():
+    assert scan.normalize_date("Mar 13, 2026") == "2026-03-13"
+
+def test_normalize_date_day_month_year():
+    assert scan.normalize_date("13 March 2026") == "2026-03-13"
+
+def test_normalize_date_none():
+    assert scan.normalize_date(None) is None
+
+def test_normalize_date_unparseable():
+    assert scan.normalize_date("not a date") is None

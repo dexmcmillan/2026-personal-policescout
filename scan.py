@@ -99,6 +99,28 @@ def is_press_release_url(url: str) -> bool:
     return any(kw in path for kw in PRESS_RELEASE_KEYWORDS)
 
 
+def normalize_date(date_str: str | None) -> str | None:
+    """
+    Convert a date string in any known format to ISO YYYY-MM-DD.
+    Returns None if the input is None or cannot be parsed.
+    Handles: "2026-03-13", "March 13, 2026", "Mar 13, 2026", "13 March 2026", etc.
+    """
+    if not date_str:
+        return None
+    # ISO format (also handles datetimes — take first 10 chars)
+    try:
+        return datetime.fromisoformat(date_str[:10]).date().isoformat()
+    except ValueError:
+        pass
+    # Human-readable formats
+    for fmt in ("%b %d, %Y", "%B %d, %Y", "%d %B %Y", "%B %d %Y", "%b %d %Y"):
+        try:
+            return datetime.strptime(date_str.strip()[:20], fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
 def extract_date_near(anchor: BeautifulSoup, date_selector: str) -> str | None:
     """
     Try to extract a date string near a link element.
@@ -124,17 +146,18 @@ def extract_date_near(anchor: BeautifulSoup, date_selector: str) -> str | None:
             el = node.select_one(date_selector)
             if el:
                 text = el.get_text(separator=" ", strip=True)
-                # Strip author prefixes like "By Brandon Police Service-Mar 12, 2026"
-                if "-" in text:
-                    text = text.split("-")[-1].strip()
-                # Strip time/timezone noise like "12 March 2026 | 11:47 America/Denver"
-                if "|" in text:
-                    text = text.split("|")[0].strip()
-                # Strip verbose prefix like "Posted on Friday, March 13, 2026 09:35 AM"
                 import re as _re
+                # Try to extract "Month D, YYYY" first (e.g. "Posted: March 12, 2026 - 10:38 am")
                 m = _re.search(r"(\w+ \d{1,2},\s*\d{4})", text)
                 if m:
                     text = m.group(1)
+                else:
+                    # Strip author prefixes like "By Brandon Police Service-Mar 12, 2026"
+                    if "-" in text:
+                        text = text.split("-")[-1].strip()
+                    # Strip time/timezone noise like "12 March 2026 | 11:47 America/Denver"
+                    if "|" in text:
+                        text = text.split("|")[0].strip()
                 if text:
                     return text[:40]
         node = node.parent
