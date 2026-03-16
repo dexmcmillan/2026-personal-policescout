@@ -455,6 +455,136 @@ def render_digest(
     )
 
 
+
+# --- Feed builder ---
+
+
+def _load_archive_items(archive_dir: Path, cutoff: date) -> list[dict]:
+    """
+    Load all press release items from archive/*.json files.
+    Normalizes dates to ISO YYYY-MM-DD, filters to on/after cutoff.
+    Malformed JSON files are skipped with a warning.
+    """
+    items = []
+    for path in archive_dir.glob("*.json"):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"  [build_feed] WARNING: skipping malformed archive {path.name}: {e}")
+            continue
+        for entry in raw:
+            iso_date = normalize_date(entry.get("date"))
+            if iso_date is None or iso_date >= cutoff.isoformat():
+                title = (entry.get("title") or "").lower()
+                source = (entry.get("service_name") or "").lower()
+                items.append({
+                    "type": "press_release",
+                    "title": entry.get("title", ""),
+                    "url": entry.get("url"),
+                    "date": iso_date,
+                    "source": entry.get("service_name", ""),
+                    "search_text": " ".join(filter(None, [title, source])),
+                    "_sort_key": iso_date or "",
+                })
+    return items
+
+
+def _load_tps_items(tps_ndjson: Path, cutoff: date) -> list[dict]:
+    """
+    Load TPS call records from the NDJSON log.
+    Returns empty list with a warning if the file does not exist.
+    """
+    if not tps_ndjson.exists():
+        print(f"  [build_feed] WARNING: TPS NDJSON not found at {tps_ndjson}, skipping TPS data")
+        return []
+    items = []
+    with tps_ndjson.open(encoding="utf-8") as f:
+        for lineno, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except Exception as e:
+                print(f"  [build_feed] WARNING: skipping malformed TPS line {lineno}: {e}")
+                continue
+            occurred_at = rec.get("occurred_at")
+            if not occurred_at:
+                continue
+            iso_date = occurred_at[:10]
+            if iso_date < cutoff.isoformat():
+                continue
+            call_type = (rec.get("call_type") or "").lower()
+            division = (rec.get("division") or "").lower()
+            cross_streets = (rec.get("cross_streets") or "").lower()
+            items.append({
+                "type": "tps_call",
+                "title": rec.get("call_type", ""),
+                "call_type": rec.get("call_type", ""),
+                "url": None,
+                "date": iso_date,
+                "occurred_at": occurred_at,
+                "source": "Toronto Police Service",
+                "division": rec.get("division", ""),
+                "cross_streets": rec.get("cross_streets", ""),
+                "search_text": " ".join(filter(None, [
+                    call_type,
+                    "toronto police service",
+                    division,
+                    cross_streets,
+                ])),
+                "_sort_key": occurred_at,
+            })
+    return items
+
+
+def build_feed(
+    archive_dir: Path,
+    tps_ndjson: Path,
+    output_dir: Path,
+    days: int = 7,
+) -> None:
+    """
+    Build the card feed: merge press releases + TPS calls, write docs/data.json
+    and render docs/index.html from templates/feed.html.
+
+    Errors (missing files, malformed JSON) are logged and skipped gracefully.
+    """
+    cutoff = date.today() - timedelta(days=days)
+    print(f"  [build_feed] Cutoff: {cutoff} ({days} days)")
+
+    press_items = _load_archive_items(archive_dir, cutoff)
+    print(f"  [build_feed] Press releases in window: {len(press_items)}")
+
+    tps_items = _load_tps_items(tps_ndjson, cutoff)
+    print(f"  [build_feed] TPS calls in window: {len(tps_items)}")
+
+    all_items = press_items + tps_items
+    all_items.sort(key=lambda x: x["_sort_key"], reverse=True)
+
+    for item in all_items:
+        item.pop("_sort_key", None)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data_path = output_dir / "data.json"
+    data_path.write_text(
+        json.dumps(all_items, ensure_ascii=False, indent=None),
+        encoding="utf-8",
+    )
+    print(f"  [build_feed] Wrote {data_path} ({len(all_items)} items)")
+
+    generated_at = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
+    try:
+        template = env.get_template("feed.html")
+    except Exception as e:
+        print(f"  [build_feed] WARNING: could not load feed.html template: {e}")
+        return
+    html = template.render(generated_at=generated_at)
+    index_path = output_dir / "index.html"
+    index_path.write_text(html, encoding="utf-8")
+    print(f"  [build_feed] Wrote {index_path}")
+
 # --- Main ---
 
 

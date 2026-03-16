@@ -257,3 +257,232 @@ def test_normalize_date_none():
 
 def test_normalize_date_unparseable():
     assert scan.normalize_date("not a date") is None
+
+
+# --- build_feed ---
+
+import json as _json
+
+
+def _make_archive(tmp_path, slug, items):
+    """Write a fake archive JSON file."""
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir(exist_ok=True)
+    (archive_dir / f"{slug}.json").write_text(
+        _json.dumps(items, ensure_ascii=False), encoding="utf-8"
+    )
+    return archive_dir
+
+
+def _make_tps_ndjson(tmp_path, records):
+    """Write a fake tps_calls.ndjson file."""
+    p = tmp_path / "tps_calls.ndjson"
+    p.write_text(
+        "\n".join(_json.dumps(r) for r in records) + "\n", encoding="utf-8"
+    )
+    return p
+
+
+def test_build_feed_creates_data_json(tmp_path):
+    """build_feed() writes docs/data.json with merged items."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "Arrest made", "url": "https://example.com/1", "date": today, "service_name": "Ottawa Police"},
+    ])
+    tps = _make_tps_ndjson(tmp_path, [
+        {
+            "objectid": 1, "occurred_at": f"{today}T12:00:00+00:00",
+            "division": "D11", "call_type": "ASSAULT", "call_type_code": "ASS",
+            "cross_streets": "MAIN - FIRST", "latitude": 43.6, "longitude": -79.4,
+            "collected_at": f"{today}T12:01:00+00:00",
+        }
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tps, output_dir=output_dir, days=7)
+
+    data_file = output_dir / "data.json"
+    assert data_file.exists()
+    items = _json.loads(data_file.read_text())
+    assert len(items) == 2
+
+    types = {i["type"] for i in items}
+    assert types == {"press_release", "tps_call"}
+
+
+def test_build_feed_filters_old_items(tmp_path):
+    """Items older than `days` are excluded."""
+    old_date = (date.today() - timedelta(days=8)).isoformat()
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "Old release", "url": "https://example.com/old", "date": old_date, "service_name": "Ottawa"},
+        {"title": "New release", "url": "https://example.com/new", "date": today, "service_name": "Ottawa"},
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "missing.ndjson", output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert len(items) == 1
+    assert items[0]["title"] == "New release"
+
+
+def test_build_feed_missing_tps_file_produces_press_release_only_feed(tmp_path):
+    """Missing tps_calls.ndjson -> feed contains only press releases, no error."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "Arrest", "url": "https://example.com/1", "date": today, "service_name": "Ottawa"},
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "no_tps.ndjson", output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert all(i["type"] == "press_release" for i in items)
+
+
+def test_build_feed_search_text_content(tmp_path):
+    """search_text is a lowercase concat of relevant fields."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "Arrest in Vanier", "url": "https://example.com/1", "date": today, "service_name": "Ottawa Police Service"},
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "missing.ndjson", output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    pr = next(i for i in items if i["type"] == "press_release")
+    assert "arrest in vanier" in pr["search_text"]
+    assert "ottawa police service" in pr["search_text"]
+
+
+def test_build_feed_tps_search_text_includes_location(tmp_path):
+    """TPS search_text includes division and cross_streets."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "dummy", [])
+    archive_dir.mkdir(exist_ok=True)
+    tps = _make_tps_ndjson(tmp_path, [
+        {
+            "objectid": 99, "occurred_at": f"{today}T10:00:00+00:00",
+            "division": "D51", "call_type": "ROBBERY", "call_type_code": "ROB",
+            "cross_streets": "GOULD ST - MUTUAL ST", "latitude": 43.66, "longitude": -79.38,
+            "collected_at": f"{today}T10:01:00+00:00",
+        }
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tps, output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    tps_item = next(i for i in items if i["type"] == "tps_call")
+    assert "d51" in tps_item["search_text"]
+    assert "gould st" in tps_item["search_text"]
+
+
+def test_build_feed_sorts_newest_first(tmp_path):
+    """Items are sorted newest-first by sort key."""
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "Old PR", "url": "https://example.com/old", "date": yesterday, "service_name": "Ottawa"},
+        {"title": "New PR", "url": "https://example.com/new", "date": today, "service_name": "Ottawa"},
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "missing.ndjson", output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert items[0]["date"] >= items[-1]["date"]
+
+
+def test_build_feed_null_dates_sort_to_end(tmp_path):
+    """Items with date=null sort after dated items."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "No Date", "url": "https://example.com/nodate", "date": None, "service_name": "Ottawa"},
+        {"title": "Has Date", "url": "https://example.com/dated", "date": today, "service_name": "Ottawa"},
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "missing.ndjson", output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert items[0]["title"] == "Has Date"
+    assert items[-1]["title"] == "No Date"
+
+
+def test_build_feed_malformed_archive_skipped(tmp_path):
+    """A malformed archive JSON file is skipped; valid archives still processed."""
+    today = date.today().isoformat()
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir()
+    (archive_dir / "bad-service.json").write_text("NOT JSON", encoding="utf-8")
+    (archive_dir / "ottawa-police.json").write_text(
+        _json.dumps([{"title": "Good", "url": "https://example.com/good", "date": today, "service_name": "Ottawa"}]),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "missing.ndjson", output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert len(items) == 1
+    assert items[0]["title"] == "Good"
+
+
+def test_build_feed_malformed_tps_line_skipped(tmp_path):
+    """A malformed JSON line in tps_calls.ndjson is skipped; valid lines still processed."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "dummy", [])
+    tps = tmp_path / "tps_calls.ndjson"
+    tps.write_text(
+        "NOT JSON\n" +
+        _json.dumps({
+            "objectid": 5, "occurred_at": f"{today}T09:00:00+00:00",
+            "division": "D12", "call_type": "THEFT", "call_type_code": "THE",
+            "cross_streets": "KING ST - QUEEN ST", "latitude": 43.65, "longitude": -79.38,
+            "collected_at": f"{today}T09:01:00+00:00",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tps, output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert len(items) == 1
+    assert items[0]["call_type"] == "THEFT"
+
+
+def test_build_feed_tps_missing_occurred_at_skipped(tmp_path):
+    """TPS records without occurred_at are skipped."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "dummy", [])
+    tps = _make_tps_ndjson(tmp_path, [
+        {
+            "objectid": 10, "occurred_at": None,
+            "division": "D41", "call_type": "DISTURBANCE", "call_type_code": "DIS",
+            "cross_streets": "YONGE - BLOOR", "latitude": 43.67, "longitude": -79.39,
+            "collected_at": f"{today}T08:00:00+00:00",
+        },
+        {
+            "objectid": 11, "occurred_at": f"{today}T08:30:00+00:00",
+            "division": "D41", "call_type": "ALARM", "call_type_code": "ALM",
+            "cross_streets": "YONGE - EGLINTON", "latitude": 43.70, "longitude": -79.40,
+            "collected_at": f"{today}T08:31:00+00:00",
+        },
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tps, output_dir=output_dir, days=7)
+
+    items = _json.loads((output_dir / "data.json").read_text())
+    assert len(items) == 1
+    assert items[0]["title"] == "ALARM"
+
+
+def test_build_feed_creates_index_html(tmp_path):
+    """build_feed() renders docs/index.html from the template."""
+    today = date.today().isoformat()
+    archive_dir = _make_archive(tmp_path, "ottawa-police", [
+        {"title": "Test PR", "url": "https://example.com/1", "date": today, "service_name": "Ottawa"},
+    ])
+    output_dir = tmp_path / "docs"
+    scan.build_feed(archive_dir=archive_dir, tps_ndjson=tmp_path / "missing.ndjson", output_dir=output_dir, days=7)
+
+    index_file = output_dir / "index.html"
+    assert index_file.exists()
+    content = index_file.read_text()
+    assert "Police Scout" in content
+    assert "data.json" in content
