@@ -111,6 +111,9 @@ def normalize_date(date_str: str | None) -> str | None:
         return datetime.fromisoformat(date_str[:10]).date().isoformat()
     except ValueError:
         pass
+    # Strip ordinal suffixes: "23rd" -> "23", "4th" -> "4", "1st" -> "1"
+    import re as _re
+    date_str = _re.sub(r"(\d+)(st|nd|rd|th)\b", r"\1", date_str.strip())
     # Human-readable formats
     for fmt in ("%b %d, %Y", "%B %d, %Y", "%d %B %Y", "%B %d %Y", "%b %d %Y"):
         try:
