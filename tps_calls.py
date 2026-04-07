@@ -10,7 +10,7 @@ ArcGIS endpoint (public, no auth required):
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -84,21 +84,33 @@ def parse_feature(attrs: dict) -> dict:
     }
 
 
-def load_seen(path: Path) -> set[int]:
-    """Load the set of already-logged OBJECTIDs from disk."""
+def load_seen(path: Path) -> dict[int, str]:
+    """
+    Load the already-logged OBJECTIDs from disk.
+    Returns a dict of {objectid: occurred_at_iso}.
+    Prunes entries older than 48 hours so recycled OBJECTIDs don't block new records.
+    Supports legacy format (plain list of ints) by treating those as having no timestamp.
+    """
     if not path.exists():
-        return set()
+        return {}
     try:
-        return set(json.loads(path.read_text(encoding="utf-8")))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:
         print(f"WARNING: Could not read seen file ({e}), starting fresh")
-        return set()
+        return {}
+
+    # Migrate legacy list format
+    if isinstance(raw, list):
+        return {}
+
+    cutoff = (datetime.now(tz=timezone.utc) - timedelta(hours=48)).isoformat()
+    return {int(k): v for k, v in raw.items() if v >= cutoff}
 
 
-def save_seen(seen: set[int], path: Path) -> None:
-    """Persist the seen OBJECTIDs set to disk."""
+def save_seen(seen: dict[int, str], path: Path) -> None:
+    """Persist the seen OBJECTIDs dict to disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(sorted(seen)), encoding="utf-8")
+    path.write_text(json.dumps(seen), encoding="utf-8")
 
 
 def append_records(records: list[dict], log_path: Path) -> None:
@@ -121,8 +133,9 @@ def main() -> None:
         oid = attrs.get("OBJECTID")
         if oid is None or oid in seen:
             continue
-        seen.add(oid)
-        new_records.append(parse_feature(attrs))
+        rec = parse_feature(attrs)
+        seen[oid] = rec["occurred_at"] or datetime.now(tz=timezone.utc).isoformat()
+        new_records.append(rec)
 
     if new_records:
         append_records(new_records, LOG_FILE)
