@@ -141,6 +141,43 @@
       padding: 40px;
       color: #c00;
     }
+
+    .sources-bar {
+      max-width: 800px;
+      margin: 0 auto 4px;
+      padding: 0 12px;
+    }
+
+    .sources-bar details {
+      font-size: 0.82rem;
+      color: #555;
+    }
+
+    .sources-bar summary {
+      cursor: pointer;
+      color: #4a90d9;
+      user-select: none;
+      padding: 4px 0;
+    }
+
+    .sources-bar summary:hover {
+      text-decoration: underline;
+    }
+
+    .sources-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      padding: 8px 0 4px;
+    }
+
+    .sources-list span {
+      background: #e8eef5;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 0.78rem;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -148,6 +185,14 @@
     <h1>Police Scout</h1>
     <p class="updated">Updated: {{ generated_at }}</p>
   </header>
+  <div class="sources-bar">
+    <details>
+      <summary>Monitoring {{ sources|length }} services</summary>
+      <div class="sources-list">
+        {% for name in sources %}<span>{{ name }}</span>{% endfor %}
+      </div>
+    </details>
+  </div>
   <div class="controls">
     <input type="search" id="search" placeholder="Search releases and calls…" autofocus>
     <span id="count"></span>

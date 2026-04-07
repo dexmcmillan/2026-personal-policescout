@@ -141,13 +141,58 @@
       padding: 40px;
       color: #c00;
     }
+
+    .sources-bar {
+      max-width: 800px;
+      margin: 0 auto 4px;
+      padding: 0 12px;
+    }
+
+    .sources-bar details {
+      font-size: 0.82rem;
+      color: #555;
+    }
+
+    .sources-bar summary {
+      cursor: pointer;
+      color: #4a90d9;
+      user-select: none;
+      padding: 4px 0;
+    }
+
+    .sources-bar summary:hover {
+      text-decoration: underline;
+    }
+
+    .sources-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      padding: 8px 0 4px;
+    }
+
+    .sources-list span {
+      background: #e8eef5;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 0.78rem;
+      color: #333;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Police Scout</h1>
-    <p class="updated">Updated: April 07, 2026 at 16:24 UTC</p>
+    <p class="updated">Updated: April 07, 2026 at 16:30 UTC</p>
   </header>
+  <div class="sources-bar">
+    <details>
+      <summary>Monitoring 17 services</summary>
+      <div class="sources-list">
+        <span>Abbotsford Police Department</span><span>Akwesasne Mohawk Police Service</span><span>Anishinabek Police Service</span><span>Barrie Police Service</span><span>Bathurst Police Force</span><span>Belleville Police Service</span><span>Blood Tribe Police Service</span><span>Brandon Police Service</span><span>Bridgewater Police Department</span><span>Cape Breton Regional Police</span><span>Cornwall Community Police Service</span><span>Edmonton Police Service</span><span>Greater Sudbury Police Service</span><span>London Police Service</span><span>Ottawa Police Service</span><span>Peel Regional Police</span><span>RCMP</span>
+      </div>
+    </details>
+  </div>
   <div class="controls">
     <input type="search" id="search" placeholder="Search releases and calls…" autofocus>
     <span id="count"></span>

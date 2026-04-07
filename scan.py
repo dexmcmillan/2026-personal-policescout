@@ -674,13 +674,14 @@ def build_feed(
     print(f"  [build_feed] Wrote {data_path} ({len(all_items)} items)")
 
     generated_at = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
+    sources = sorted({item["source"] for item in press_items if item.get("source")})
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     try:
         template = env.get_template("feed.html")
     except Exception as e:
         print(f"  [build_feed] WARNING: could not load feed.html template: {e}")
         return
-    html = template.render(generated_at=generated_at)
+    html = template.render(generated_at=generated_at, sources=sources)
     index_path = output_dir / "index.html"
     index_path.write_text(html, encoding="utf-8")
     print(f"  [build_feed] Wrote {index_path}")
