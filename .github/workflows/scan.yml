@@ -34,6 +34,6 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add docs/ data/seen_items.json
+          git add docs/ data/seen_items.json data/archive/
           git diff --staged --quiet || git commit -m "Update Police Scout digest for $(date -u +%Y-%m-%d)"
           git push

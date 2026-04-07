@@ -484,6 +484,63 @@ def scrape_site(
         return [], str(e)
 
 
+# --- Archive persistence ---
+
+
+def _service_name_to_filename(service_name: str) -> str:
+    """Convert a service name to a slug suitable for use as a filename."""
+    import re as _re
+    slug = service_name.lower().strip()
+    slug = _re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = slug.strip("-")
+    return slug + ".json"
+
+
+def persist_to_archive(new_items: list[dict], archive_dir: Path) -> None:
+    """
+    Append newly scraped items to their per-service archive JSON files.
+
+    Each file is named after the service (slugified) and contains a list of
+    {title, url, date, service_name} dicts. Existing entries are preserved;
+    new ones are prepended so the file stays newest-first.
+    Deduplication is by URL.
+    """
+    archive_dir.mkdir(parents=True, exist_ok=True)
+
+    # Group new items by service
+    by_service: dict[str, list[dict]] = {}
+    for item in new_items:
+        by_service.setdefault(item["service_name"], []).append(item)
+
+    for service_name, items in by_service.items():
+        filename = _service_name_to_filename(service_name)
+        path = archive_dir / filename
+
+        # Load existing entries
+        existing: list[dict] = []
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except Exception as e:
+                print(f"  [persist_to_archive] WARNING: could not read {filename}: {e}")
+
+        existing_urls = {e.get("url") for e in existing}
+
+        # Prepend new items (skip any already present by URL)
+        to_add = [
+            {"title": i["title"], "url": i["url"], "date": i.get("date"), "service_name": i["service_name"]}
+            for i in items
+            if i["url"] not in existing_urls
+        ]
+
+        if not to_add:
+            continue
+
+        merged = to_add + existing
+        path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"  [persist_to_archive] {filename}: added {len(to_add)} item(s) ({len(merged)} total)")
+
+
 # --- Feed builder ---
 
 
@@ -690,6 +747,9 @@ def main():
             state[h] = now_ts
     save_state(state)
     print(f"State saved: {len(state)} items")
+
+    # Persist new items to per-service archive files
+    persist_to_archive(all_new_items, archive_dir=DATA_DIR / "archive")
 
     # Build the card feed
     build_feed(
