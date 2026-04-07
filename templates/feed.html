@@ -203,7 +203,7 @@
           div.innerHTML =
             '<div class="card-meta">' +
               '<span class="card-source">' + esc(item.source) + '</span>' +
-              '<span class="card-time">' + esc(formatDate(item.date)) + '</span>' +
+              '<span class="card-time">' + esc(formatDate(item.date) || 'Date unknown') + '</span>' +
             '</div>' +
             '<div class="card-title">' +
               (item.url

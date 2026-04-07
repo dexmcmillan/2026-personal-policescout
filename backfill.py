@@ -28,6 +28,8 @@ from scan import (
     SOURCES_FILE,
     fetch_opp_items,
     fetch_rcmp_items,
+    fetch_vpd_items,
+    fetch_winnipeg_items,
     extract_links_by_selector,
     extract_links_title_from_heading,
     extract_links,
@@ -66,16 +68,19 @@ def save_archive(slug: str, items: list[dict]) -> None:
     path.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def merge_items(existing: list[dict], new_items: list[dict]) -> list[dict]:
-    """Merge new_items into existing, deduping by URL. Newest first."""
+def merge_items(existing: list[dict], new_items: list[dict], scraped_on: str | None = None) -> list[dict]:
+    """Merge new_items into existing, deduping by URL. Newest first.
+    New items that lack a scraped date are stamped with first_scraped=scraped_on."""
     seen_urls = {item["url"] for item in existing}
     merged = list(existing)
     for item in new_items:
         if item["url"] not in seen_urls:
             seen_urls.add(item["url"])
+            if scraped_on and not item.get("date"):
+                item = {**item, "first_scraped": scraped_on}
             merged.append(item)
     # Sort newest first (items without dates go last)
-    merged.sort(key=lambda x: x.get("date") or "", reverse=True)
+    merged.sort(key=lambda x: x.get("date") or x.get("first_scraped") or "", reverse=True)
     return merged
 
 
@@ -236,6 +241,79 @@ def backfill_rcmp(cutoff: date) -> list[dict]:
     ]
 
 
+# --- VPD backfill (WordPress REST API, paginated) ---
+
+def backfill_vpd(cutoff: date) -> list[dict]:
+    """Fetch VPD news via WordPress REST API, paginating until cutoff."""
+    results = []
+    page = 1
+    while True:
+        resp = requests.get(
+            "https://vpd.ca/wp-json/wp/v2/posts",
+            params={"per_page": 100, "page": page, "_fields": "date,link,title"},
+            timeout=20,
+            headers={"User-Agent": USER_AGENT},
+            verify=False,
+        )
+        if resp.status_code == 400:
+            break  # past last page
+        resp.raise_for_status()
+        entries = resp.json()
+        if not entries:
+            break
+        all_old = True
+        for entry in entries:
+            date_str = entry.get("date", "")[:10] or None
+            if is_within_cutoff(date_str, cutoff):
+                all_old = False
+                results.append({
+                    "title": entry.get("title", {}).get("rendered", "").strip(),
+                    "url": entry.get("link", "").strip(),
+                    "date": date_str,
+                })
+        if all_old:
+            break
+        page += 1
+        time.sleep(REQUEST_DELAY)
+    return results
+
+
+# --- Winnipeg backfill (Drupal, paginated) ---
+
+def backfill_winnipeg(cutoff: date) -> list[dict]:
+    """Fetch Winnipeg Police news releases, paginating via ?page=N."""
+    results = []
+    page = 0
+    seen_urls: set[str] = set()
+    base_url = "https://www.winnipeg.ca/police/community/news-releases"
+    while page < MAX_PAGES:
+        url = f"{base_url}?page={page}" if page > 0 else base_url
+        print(f"    Page {page + 1}: {url}")
+        soup, error = fetch_page(url)
+        if error:
+            print(f"    Error: {error}")
+            break
+        page_items = []
+        all_old = True
+        for item in fetch_winnipeg_items(soup):
+            if item["url"] in seen_urls:
+                continue
+            seen_urls.add(item["url"])
+            if is_within_cutoff(item.get("date"), cutoff):
+                all_old = False
+                page_items.append(item)
+        results.extend(page_items)
+        if all_old and page > 0:
+            print(f"    All items older than cutoff, stopping.")
+            break
+        next_url = find_next_page_url(soup, url)
+        if not next_url or next_url == url:
+            break
+        page += 1
+        time.sleep(REQUEST_DELAY)
+    return results
+
+
 # --- Generic paginated backfill ---
 
 def backfill_site(
@@ -298,6 +376,7 @@ def backfill_site(
 
 def main():
     cutoff = date.today() - timedelta(days=CUTOFF_DAYS)
+    today_iso = date.today().isoformat()
     print(f"Backfill: collecting releases since {cutoff} ({CUTOFF_DAYS} days)")
 
     sources = load_sources()
@@ -324,6 +403,10 @@ def main():
                 new_items = backfill_opp(cutoff)
             elif "rcmp.ca" in url:
                 new_items = backfill_rcmp(cutoff)
+            elif "vpd.ca" in url:
+                new_items = backfill_vpd(cutoff)
+            elif "winnipeg.ca/police" in url:
+                new_items = backfill_winnipeg(cutoff)
             else:
                 new_items = backfill_site(name, url, link_selector, date_selector, cutoff)
         except Exception as e:
@@ -335,7 +418,7 @@ def main():
             item.setdefault("service_name", name)
 
         # Merge and save
-        merged = merge_items(existing, new_items)
+        merged = merge_items(existing, new_items, scraped_on=today_iso)
         save_archive(slug, merged)
         added = len(merged) - len(existing)
         print(f"  Fetched: {len(new_items)}, Added: {added}, Total: {len(merged)}")

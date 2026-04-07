@@ -146,7 +146,7 @@
 <body>
   <header>
     <h1>Police Scout</h1>
-    <p class="updated">Updated: April 07, 2026 at 12:13 UTC</p>
+    <p class="updated">Updated: March 31, 2026 at 19:19 UTC</p>
   </header>
   <div class="controls">
     <input type="search" id="search" placeholder="Search releases and calls…" autofocus>
@@ -203,7 +203,7 @@
           div.innerHTML =
             '<div class="card-meta">' +
               '<span class="card-source">' + esc(item.source) + '</span>' +
-              '<span class="card-time">' + esc(formatDate(item.date)) + '</span>' +
+              '<span class="card-time">' + esc(formatDate(item.date) || 'Date unknown') + '</span>' +
             '</div>' +
             '<div class="card-title">' +
               (item.url

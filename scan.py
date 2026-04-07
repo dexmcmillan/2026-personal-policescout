@@ -256,6 +256,9 @@ OPP_NEWS_BASE = "https://www.opp.ca/news/viewnews/"
 
 RCMP_NEWS_URL = "https://rcmp.ca/en/news"
 
+VPD_API_URL = "https://vpd.ca/wp-json/wp/v2/posts"
+WINNIPEG_NEWS_URL = "https://www.winnipeg.ca/police/community/news-releases"
+
 
 def fetch_opp_items(limit: int = 200) -> list[dict]:
     """Fetch press releases from the OPP Proton API."""
@@ -334,6 +337,61 @@ def fetch_rcmp_items() -> list[dict]:
     return results
 
 
+def fetch_vpd_items(per_page: int = 100) -> list[dict]:
+    """Fetch Vancouver Police Department news via WordPress REST API."""
+    resp = requests.get(
+        VPD_API_URL,
+        params={"per_page": per_page, "_fields": "date,link,title"},
+        timeout=20,
+        headers={"User-Agent": USER_AGENT},
+        verify=False,
+    )
+    resp.raise_for_status()
+    results = []
+    for entry in resp.json():
+        title = entry.get("title", {}).get("rendered", "").strip()
+        url = entry.get("link", "").strip()
+        date_str = entry.get("date", "")[:10] or None
+        if not title or not url:
+            continue
+        results.append({"title": title, "url": url, "date": date_str})
+    return results
+
+
+def fetch_winnipeg_items(soup: BeautifulSoup | None = None) -> list[dict]:
+    """Fetch Winnipeg Police Service news releases from listing page (or a pre-parsed soup)."""
+    if soup is None:
+        resp = requests.get(
+            WINNIPEG_NEWS_URL,
+            timeout=20,
+            headers={"User-Agent": USER_AGENT},
+            verify=False,
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+    results = []
+    seen_urls = set()
+    for row in soup.select("div.views-row"):
+        a = row.select_one("h3.field-content a")
+        if not a:
+            continue
+        title = a.get_text(strip=True)
+        href = a.get("href", "")
+        if not title or not href:
+            continue
+        url = urljoin(WINNIPEG_NEWS_URL, href)
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        # Date is in <time datetime="..."> inside .views-field-field-date-time
+        date_str = None
+        time_el = row.select_one(".views-field-field-date-time time")
+        if time_el:
+            date_str = normalize_date(time_el.get("datetime", "") or time_el.get_text(strip=True))
+        results.append({"title": title, "url": url, "date": date_str})
+    return results
+
+
 def extract_links_title_from_heading(
     soup: BeautifulSoup,
     base_url: str,
@@ -390,6 +448,10 @@ def scrape_site(
             raw_links = fetch_opp_items()
         elif "rcmp.ca" in url:
             raw_links = fetch_rcmp_items()
+        elif "vpd.ca" in url:
+            raw_links = fetch_vpd_items()
+        elif "winnipeg.ca/police" in url:
+            raw_links = fetch_winnipeg_items()
         else:
             resp = requests.get(
                 url,
@@ -425,11 +487,13 @@ def scrape_site(
 # --- Feed builder ---
 
 
-def _load_archive_items(archive_dir: Path, cutoff: date) -> list[dict]:
+def _load_archive_items(archive_dir: Path, cutoff: date, state: dict | None = None) -> list[dict]:
     """
     Load all press release items from archive/*.json files.
     Normalizes dates to ISO YYYY-MM-DD, filters to on/after cutoff.
     Malformed JSON files are skipped with a warning.
+    When state is provided, items missing a scraped date fall back to
+    their first-seen timestamp from the state dict.
     """
     items = []
     for path in archive_dir.glob("*.json"):
@@ -439,19 +503,31 @@ def _load_archive_items(archive_dir: Path, cutoff: date) -> list[dict]:
             print(f"  [build_feed] WARNING: skipping malformed archive {path.name}: {e}")
             continue
         for entry in raw:
-            iso_date = normalize_date(entry.get("date"))
-            if iso_date is None or iso_date >= cutoff.isoformat():
-                title = (entry.get("title") or "").lower()
-                source = (entry.get("service_name") or "").lower()
-                items.append({
-                    "type": "press_release",
-                    "title": entry.get("title", ""),
-                    "url": entry.get("url"),
-                    "date": iso_date,
-                    "source": entry.get("service_name", ""),
-                    "search_text": " ".join(filter(None, [title, source])),
-                    "_sort_key": iso_date or "",
-                })
+            scraped_date = normalize_date(entry.get("date"))
+            # Determine whether this item falls within the cutoff window.
+            # Items with no scraped date are always included (we can't filter them out).
+            if scraped_date is not None and scraped_date < cutoff.isoformat():
+                continue
+            # For display: fall back to first_scraped field, then state, when scraped date is missing.
+            display_date = scraped_date
+            if display_date is None:
+                display_date = entry.get("first_scraped") or None
+            if display_date is None and state is not None:
+                h = item_hash(entry.get("title", ""), entry.get("url") or "")
+                first_seen = state.get(h)
+                if first_seen:
+                    display_date = first_seen[:10]
+            title = (entry.get("title") or "").lower()
+            source = (entry.get("service_name") or "").lower()
+            items.append({
+                "type": "press_release",
+                "title": entry.get("title", ""),
+                "url": entry.get("url"),
+                "date": display_date,
+                "source": entry.get("service_name", ""),
+                "search_text": " ".join(filter(None, [title, source])),
+                "_sort_key": display_date or "",
+            })
     return items
 
 
@@ -519,7 +595,8 @@ def build_feed(
     cutoff = date.today() - timedelta(days=days)
     print(f"  [build_feed] Cutoff: {cutoff} ({days} days)")
 
-    press_items = _load_archive_items(archive_dir, cutoff)
+    state = load_state()
+    press_items = _load_archive_items(archive_dir, cutoff, state=state)
     print(f"  [build_feed] Press releases in window: {len(press_items)}")
 
     tps_items = _load_tps_items(tps_ndjson, cutoff)
