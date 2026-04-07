@@ -757,7 +757,7 @@ def main():
         archive_dir=DATA_DIR / "archive",
         tps_ndjson=DATA_DIR / "tps_calls.ndjson",
         output_dir=DOCS_DIR,
-        days=7,
+        days=365,
     )
     print("Done.")
 
