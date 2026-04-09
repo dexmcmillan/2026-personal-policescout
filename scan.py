@@ -179,7 +179,13 @@ def extract_links_by_selector(
         href = a.get("href", "")
         if not href or href.startswith("#") or href.startswith("mailto:") or href.startswith("tel:"):
             continue
-        title = a.get_text(strip=True)
+        # PressPoint CMS: prefer .pp_newsreel_title child over full anchor text
+        # (full text concatenates date/time/timezone before the real title)
+        pp_title = a.select_one(".pp_newsreel_title")
+        if pp_title:
+            title = pp_title.get_text(strip=True)
+        else:
+            title = a.get_text(strip=True)
         if not title:
             # Try aria-label for anchor-wrapping patterns (e.g. ppUnit)
             title = a.get("aria-label", "").strip()
