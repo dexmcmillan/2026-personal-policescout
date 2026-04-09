@@ -256,10 +256,41 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
 
 # Sites that use JS rendering and can't be scraped for content via static HTML.
 # OPP content is fetched via API in fetch_opp_items() instead.
+# Edmonton has a custom fetcher below.
 _JS_RENDERED_HOSTS = {
     "www.opp.ca",
-    "www.edmontonpolice.ca",
 }
+
+
+def _fetch_edmonton_content(url: str) -> str | None:
+    """
+    Fetch content for an Edmonton Police Service release page.
+    EPS uses a flat XHTML layout with no <main>/<article>; the release body
+    lives in div.leftColumn. Strip the breadcrumb header line before returning.
+    """
+    import re as _re
+    try:
+        resp = requests.get(
+            url,
+            timeout=15,
+            headers={"User-Agent": USER_AGENT},
+            verify=False,
+        )
+        resp.raise_for_status()
+    except Exception:
+        return None
+    soup = BeautifulSoup(resp.text, "html.parser")
+    el = soup.select_one("div.leftColumn")
+    if not el:
+        return None
+    # Remove sidebar nav that sometimes bleeds in
+    for tag in el.select("div.noindex, nav, ul.menu"):
+        tag.decompose()
+    text = el.get_text(separator="\n", strip=True)
+    # Strip leading breadcrumb line (e.g. "Edmonton Police Service>Newsroom>Media Releases>Title")
+    text = _re.sub(r"^[^\n]*>[^\n]*\n", "", text)
+    text = _re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip() if len(text) > 50 else None
 
 
 def fetch_release_content(url: str) -> str | None:
@@ -273,6 +304,8 @@ def fetch_release_content(url: str) -> str | None:
     host = urlparse(url).hostname or ""
     if host in _JS_RENDERED_HOSTS:
         return None
+    if host == "www.edmontonpolice.ca":
+        return _fetch_edmonton_content(url)
     try:
         resp = requests.get(
             url,
