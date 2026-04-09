@@ -299,6 +299,33 @@ def _fetch_edmonton_content(url: str) -> str | None:
     return text.strip() if len(text) > 50 else None
 
 
+def _clean_hamilton_content(text: str, title: str) -> str:
+    """
+    Strip PressPoint boilerplate from Hamilton Police release content.
+
+    Each release page includes:
+    - A header: city name, date parts, timezone, and the release title repeated
+    - A footer: "Related Stories" sidebar listing other releases in the same
+      date/time/timezone format
+    """
+    import re as _re
+
+    # Strip header: everything up to and including the repeated title line.
+    # The title appears verbatim after the date/timezone metadata.
+    if title:
+        escaped = _re.escape(title.strip())
+        text = _re.sub(r"^.*?" + escaped + r"\n", "", text, count=1, flags=_re.DOTALL)
+
+    # Strip footer at "Related Stories" (PressPoint sidebar listing other releases)
+    for marker in ("\nRelated Stories", "\nDownload Media Kit"):
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx]
+
+    text = _re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def fetch_release_content(url: str) -> str | None:
     """
     Fetch an individual press release page and return its plain-text body.
@@ -738,6 +765,8 @@ def persist_to_archive(new_items: list[dict], archive_dir: Path) -> None:
                 continue
             # Use pre-fetched content (e.g. from OPP API) if available, otherwise scrape
             content = i.get("content") or (fetch_release_content(i["url"]) if i.get("url") else None)
+            if content and i["service_name"] == "Hamilton Police Service":
+                content = _clean_hamilton_content(content, i["title"])
             to_add.append({
                 "title": i["title"],
                 "url": i["url"],
