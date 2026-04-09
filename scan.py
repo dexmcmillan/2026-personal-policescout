@@ -299,6 +299,58 @@ def _fetch_edmonton_content(url: str) -> str | None:
     return text.strip() if len(text) > 50 else None
 
 
+def split_ck_daily_release(item: dict) -> list[dict]:
+    """
+    Split a Chatham-Kent Police daily omnibus release into per-incident items.
+
+    Daily releases contain multiple incidents separated by headers like
+    "Theft – CK26024691" or (split across lines) "Warrants/IPV, Arrest\n–\nCK26024398".
+    Each incident block is extracted as a separate item with a title like
+    "Theft (CK26024691)" and the date extracted from the block's "Date:" line.
+    If no incident headers are found, returns [item] unchanged.
+    """
+    import re as _re
+
+    content = item.get("content") or ""
+    url = item.get("url", "")
+    date = item.get("date")
+    service_name = item.get("service_name", "Chatham-Kent Police Service")
+
+    # Normalize split-line em-dash pattern: "Type\n–\nCKxxxx" -> "Type – CKxxxx"
+    normalized = _re.sub(r"\n[–\-]\n(CK\d+)", r" – \1", content)
+    # Also handle "Type –\nCKxxxx"
+    normalized = _re.sub(r"[–\-]\n(CK\d+)", r"– \1", normalized)
+
+    # Incident header: "Some Incident Type – CKxxxxxxxx" at start of a line
+    pattern = _re.compile(r"^(.{3,80}?)\s*[–\-]\s*(CK\d+(?:/CK\d+)*)", _re.MULTILINE)
+    matches = list(pattern.finditer(normalized))
+
+    if not matches:
+        return [item]
+
+    results = []
+    for i, m in enumerate(matches):
+        incident_type = m.group(1).strip()
+        case_num = m.group(2).strip()
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(normalized)
+        block = normalized[start:end].strip()
+
+        # Try to extract the actual incident date from "Date: Month D, YYYY"
+        date_match = _re.search(r"Date:\s+([A-Za-z]+ \d{1,2},?\s*\d{4})", block)
+        incident_date = normalize_date(date_match.group(1)) if date_match else date
+
+        results.append({
+            "title": f"{incident_type} ({case_num})",
+            "url": url,
+            "date": incident_date,
+            "service_name": service_name,
+            "content": block,
+        })
+
+    return results
+
+
 def _clean_hamilton_content(text: str, title: str) -> str:
     """
     Strip PressPoint boilerplate from Hamilton Police release content.
@@ -757,23 +809,32 @@ def persist_to_archive(new_items: list[dict], archive_dir: Path) -> None:
                 print(f"  [persist_to_archive] WARNING: could not read {filename}: {e}")
 
         existing_urls = {e.get("url") for e in existing}
+        # CK incidents share a URL per daily release; dedup by (title, url) instead
+        existing_ck_keys = {(e.get("title"), e.get("url")) for e in existing}
 
         # Prepend new items (skip any already present by URL)
         to_add = []
         for i in items:
-            if i["url"] in existing_urls:
+            if i["url"] in existing_urls and service_name != "Chatham-Kent Police Service":
                 continue
             # Use pre-fetched content (e.g. from OPP API) if available, otherwise scrape
             content = i.get("content") or (fetch_release_content(i["url"]) if i.get("url") else None)
             if content and i["service_name"] == "Hamilton Police Service":
                 content = _clean_hamilton_content(content, i["title"])
-            to_add.append({
+            base = {
                 "title": i["title"],
                 "url": i["url"],
                 "date": i.get("date"),
                 "service_name": i["service_name"],
                 "content": content,
-            })
+            }
+            if service_name == "Chatham-Kent Police Service":
+                # Split daily omnibus releases into per-incident items
+                for incident in split_ck_daily_release(base):
+                    if (incident["title"], incident["url"]) not in existing_ck_keys:
+                        to_add.append(incident)
+            else:
+                to_add.append(base)
 
         if not to_add:
             continue
