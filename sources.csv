@@ -16,7 +16,7 @@ Brantford Police Service,https://www.brantfordpolice.ca/news-and-media-releases/
 Bridgewater Police Department,https://www.bridgewaterpolice.ca/news-room,,
 Brockville Police,https://brockvillepolice.com/news/,.entry-title a,time
 Calgary Police Service,https://newsroom.calgary.ca/police-news-releases/,a.ppUnit,.pp-newsreel-list__date
-Cape Breton Regional Police,https://www.cbrps.ca/media-releases/,,time
+Cape Breton Regional Police,https://www.cbrps.ca/media-releases/,HEADING:div.item-content,
 Chatham-Kent Police Service,https://ckpolice.com/daily-news-release/,h2 a[href*="release"],time
 Cobourg Police Service,https://cobourgpoliceservice.com/category/news/,.entry-title a,time
 Cornwall Community Police Service,https://cornwallpolice.ca/news,div.card h4 a,
