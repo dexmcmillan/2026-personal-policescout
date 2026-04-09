@@ -1,177 +1,73 @@
 [
   {
-    "title": "Newsroom",
-    "url": "https://www.edmontonpolice.ca/news.aspx",
+    "title": "Police seek assistance locating missing woman",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/MissingWomanApril92026",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Edmonton Police Calls for Service",
-    "url": "https://www.edmontonpolice.ca/News/Callsfforservice",
+    "title": "Autopsy complete in west Edmonton death",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/AutopsyApril8",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "City Council Budget Presentation",
-    "url": "https://www.edmontonpolice.ca/News/CityCouncilBudgetPresentation",
+    "title": "Police seek additional complainants in fraud investigation",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/odometerfraudMarch26",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Frequently Asked Questions",
-    "url": "https://www.edmontonpolice.ca/News/FAQ sheets",
+    "title": "Police investigating suspicious death",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/SusDeathApril4",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "EPS in the Media",
-    "url": "https://www.edmontonpolice.ca/News/EPSinthemedia",
+    "title": "Police warning of evolving phone scam",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/BankFraudApril3",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Facial Recognition",
-    "url": "https://www.edmontonpolice.ca/News/FacialRec",
+    "title": "Public Information and Warning: Sexual Offender released",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/BAUApril2",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Line Of Duty Death",
-    "url": "https://www.edmontonpolice.ca/News/LineOfDutyDeath",
+    "title": "Three arrested, multiple charges laid in ongoing Kijiji and Facebook marketplace robberies",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/kijijiFBrobberiesarrestMar",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Police Use of Naloxone",
-    "url": "https://www.edmontonpolice.ca/News/PoliceUseofNaloxone",
+    "title": "Male charged after knife attack on police",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/AttemptedMurderMarch30",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Official Statements",
-    "url": "https://www.edmontonpolice.ca/News/Statements",
+    "title": "Celebrating 50 years of community heroes",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/Celebrating50yearsofcommunityheroes",
     "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
-    "title": "Media Guidelines",
-    "url": "https://www.edmontonpolice.ca/News/MediaGuidelines",
+    "title": "Police lay charges in relation to missing person investigation",
+    "url": "https://www.edmontonpolice.ca/News/MediaReleases/homicidesuttonMar26",
     "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Media Releases",
-    "url": "https://www.edmontonpolice.ca/News/MediaReleases",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Calls For Service",
-    "url": "https://www.edmontonpolice.ca/News/CallsForService",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Success Stories",
-    "url": "https://www.edmontonpolice.ca/News/SuccessStories",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Community Events",
-    "url": "https://www.edmontonpolice.ca/News/CommunityEvents",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Disciplinary Hearings: Decisions",
-    "url": "https://www.edmontonpolice.ca/News/DisciplinaryHearings",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Compliment a Cop",
-    "url": "https://www.edmontonpolice.ca/News/Compliments",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Body Worn Video: What you need to know",
-    "url": "https://www.edmontonpolice.ca/News/BWC",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "EPS implements new policy on naming of homicide victims",
-    "url": "https://www.edmontonpolice.ca/News/namingofhomicidevictims",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "ACLC Steering Committee - Terms of Reference",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/CAC/ACLC%20Steering%20Committee%20Terms%20of%20Reference.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Handbook for strengthening harmony between immigrant communities and the Edmonton Police Service",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/CAC/ACLC_StrenghtheningHarmony.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Livret pour renforcer l'harmonie entre les communautes immigrantes et le Service de Police d'Edmonton",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/CAC/ACLC_StrengtheningHarmony_French.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Brochure - Sexual Minorities Liaison Committee",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/CAC/Brochure%20%20%20SMLC%20%202011.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Sexual Minorities Liaison Committee Brochure",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/CAC/Sexual%20Minorities%20Liaison%20Committee%20TH.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Hate Crimes Brochure - Punjabi",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/Brochures/Handbills/HateCrimes/HateCrime_punjabi.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Hate Crimes Brochure - Chinese",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/Brochures/Handbills/HateCrimes/Hatecrimes_chinese.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Hate Crimes Brochure - French",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/Brochures/Handbills/HateCrimes/Hatecrimes_french.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Hate Crimes Brochure - Hindi",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/Brochures/Handbills/HateCrimes/Hatecrimes_hindi.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Hate Crimes Brochures - Persian",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/Brochures/Handbills/HateCrimes/hatecrimes_persian.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
-  },
-  {
-    "title": "Hate Crimes Brochure - Urdu",
-    "url": "https://www.edmontonpolice.ca/-/media/EPS%20External/Files/Brochures/Handbills/HateCrimes/Hatecrimes_urdu.pdf",
-    "date": null,
-    "service_name": "Edmonton Police Service"
+    "service_name": "Edmonton Police Service",
+    "content": null
   },
   {
     "title": "Police seek dashcam footage in collision investigation",

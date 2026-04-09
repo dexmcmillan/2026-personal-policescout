@@ -22,7 +22,7 @@ Cobourg Police Service,https://cobourgpoliceservice.com/category/news/,.entry-ti
 Cornwall Community Police Service,https://cornwallpolice.ca/news,div.card h4 a,
 Delta Police Department,https://www.deltapolice.ca/media/releases,a.news-item__link,.news-item__date
 Durham Regional Police Service,https://www.drps.ca/news/media-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
-Edmonton Police Service,https://www.edmontonpolice.ca/News/MediaReleases,,
+Edmonton Police Service,https://www.edmontonpolice.ca/News/MediaReleases,h2 a[href*="MediaReleases/"],
 Fredericton Police Force,https://www.fredericton.ca/your-government/news,article h3 a,time
 Greater Sudbury Police Service,https://www.gsps.ca/Modules/News/en,h2 a[href*="news"],.field-content
 Guelph Police Service,https://www.guelphpolice.ca/news/media-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
