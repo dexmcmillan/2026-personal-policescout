@@ -254,6 +254,158 @@ def extract_links(soup: BeautifulSoup, base_url: str) -> list[dict]:
     return [lnk for lnk in links if is_press_release_url(lnk["url"])]
 
 
+# Sites that use JS rendering and can't be scraped for content via static HTML.
+# OPP content is fetched via API in fetch_opp_items() instead.
+_JS_RENDERED_HOSTS = {
+    "www.opp.ca",
+    "www.edmontonpolice.ca",
+}
+
+
+def fetch_release_content(url: str) -> str | None:
+    """
+    Fetch an individual press release page and return its plain-text body.
+
+    Tries to extract text from the most specific content container available
+    (<article>, <main>, .content, .entry-content, etc.). Falls back to <body>.
+    Returns None on network error, JS-rendered sites, or if no usable text is found.
+    """
+    host = urlparse(url).hostname or ""
+    if host in _JS_RENDERED_HOSTS:
+        return None
+    try:
+        resp = requests.get(
+            url,
+            timeout=15,
+            headers={"User-Agent": USER_AGENT},
+            verify=False,
+        )
+        resp.raise_for_status()
+    except Exception:
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Remove noisy tags before extracting text
+    for tag in soup(["script", "style", "nav", "header", "footer", "form", "noscript", "aside"]):
+        tag.decompose()
+
+    # Try progressively broader containers until we find something with real text
+    selectors = [
+        "article",
+        "main",
+        ".entry-content",
+        ".post-content",
+        ".article-body",
+        ".content-body",
+        ".news-body",
+        ".field--name-body",
+        ".field-name-body",
+        "#content",
+        ".content",
+        "div[class*='content']",
+        "body",
+    ]
+    for sel in selectors:
+        el = soup.select_one(sel)
+        if el:
+            text = el.get_text(separator="\n", strip=True)
+            # Strip very short results (nav remnants, etc.)
+            if len(text) > 100:
+                import re as _re
+                # Collapse excessive blank lines
+                text = _re.sub(r"\n{3,}", "\n\n", text)
+                return text.strip()
+
+    return None
+
+
+def _fetch_opp_content_for_entry(entry_id: str) -> str | None:
+    """
+    Fetch content for a single OPP entry via the Proton API by entry ID.
+    Returns plain text or None on failure.
+    """
+    import json as _json
+    import re as _re
+
+    payload = {
+        "returnData": _json.dumps({"data.content": "1"}),
+        "findData": _json.dumps({"id": entry_id}),
+        "limit": 1,
+        "skip": 0,
+    }
+    try:
+        resp = requests.post(
+            OPP_API_URL,
+            json=payload,
+            timeout=20,
+            headers={"User-Agent": USER_AGENT},
+            verify=False,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return None
+
+    if not data:
+        return None
+    raw_html = (data[0].get("data") or {}).get("content", "") or ""
+    if not raw_html:
+        return None
+    text = BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
+    text = _re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip() if len(text) > 50 else None
+
+
+def backfill_content(archive_dir: Path) -> None:
+    """
+    For every item in the archive that has no 'content' field, fetch and store it.
+
+    Processes all *.json files in archive_dir. Modifies files in-place.
+    Skips items whose URL is None or empty.
+    Adds a small delay between requests to be polite.
+    OPP items are fetched via the Proton API per-entry rather than HTML scraping.
+    """
+    import time
+
+    archive_files = sorted(archive_dir.glob("*.json"))
+    total_fetched = 0
+    total_skipped = 0
+
+    for path in archive_files:
+        try:
+            items: list[dict] = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            print(f"  [backfill_content] WARNING: could not read {path.name}: {e}")
+            continue
+
+        missing = [i for i, item in enumerate(items) if not item.get("content") and item.get("url")]
+        if not missing:
+            continue
+
+        print(f"  [backfill_content] {path.name}: fetching content for {len(missing)} item(s)...")
+        modified = False
+        for idx in missing:
+            url = items[idx]["url"]
+            if urlparse(url).hostname == "www.opp.ca":
+                entry_id = url.rstrip("/").split("/")[-1]
+                content = _fetch_opp_content_for_entry(entry_id)
+            else:
+                content = fetch_release_content(url)
+            if content:
+                items[idx]["content"] = content
+                modified = True
+                total_fetched += 1
+            else:
+                total_skipped += 1
+            time.sleep(0.5)
+
+        if modified:
+            path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print(f"  [backfill_content] Done: {total_fetched} fetched, {total_skipped} failed/empty")
+
+
 OPP_API_URL = "https://www.opp.ca/protonapi/entry/list/"
 OPP_NEWS_BASE = "https://www.opp.ca/news/viewnews/"
 
@@ -264,14 +416,16 @@ WINNIPEG_NEWS_URL = "https://www.winnipeg.ca/police/community/news-releases"
 
 
 def fetch_opp_items(limit: int = 200) -> list[dict]:
-    """Fetch press releases from the OPP Proton API."""
+    """Fetch press releases from the OPP Proton API, including full body content."""
     import json as _json
+    import re as _re
 
     payload = {
         "returnData": _json.dumps({
             "data.title": "1",
             "data.displaydate": "1",
             "data.category": "1",
+            "data.content": "1",
         }),
         "findData": _json.dumps({"template.name": "General News"}),
         "limit": limit,
@@ -294,10 +448,19 @@ def fetch_opp_items(limit: int = 200) -> list[dict]:
         date_str = d.get("displaydate", "")[:10] or None
         if not entry_id or not title:
             continue
+        # Strip HTML tags from the content field
+        raw_html = d.get("content", "") or ""
+        content = None
+        if raw_html:
+            text = BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
+            text = _re.sub(r"\n{3,}", "\n\n", text)
+            if len(text) > 50:
+                content = text
         results.append({
             "title": title,
             "url": OPP_NEWS_BASE + entry_id,
             "date": date_str,
+            "content": content,
         })
     return results
 
@@ -530,11 +693,19 @@ def persist_to_archive(new_items: list[dict], archive_dir: Path) -> None:
         existing_urls = {e.get("url") for e in existing}
 
         # Prepend new items (skip any already present by URL)
-        to_add = [
-            {"title": i["title"], "url": i["url"], "date": i.get("date"), "service_name": i["service_name"]}
-            for i in items
-            if i["url"] not in existing_urls
-        ]
+        to_add = []
+        for i in items:
+            if i["url"] in existing_urls:
+                continue
+            # Use pre-fetched content (e.g. from OPP API) if available, otherwise scrape
+            content = i.get("content") or (fetch_release_content(i["url"]) if i.get("url") else None)
+            to_add.append({
+                "title": i["title"],
+                "url": i["url"],
+                "date": i.get("date"),
+                "service_name": i["service_name"],
+                "content": content,
+            })
 
         if not to_add:
             continue
@@ -579,13 +750,15 @@ def _load_archive_items(archive_dir: Path, cutoff: date, state: dict | None = No
                     display_date = first_seen[:10]
             title = (entry.get("title") or "").lower()
             source = (entry.get("service_name") or "").lower()
+            content = entry.get("content") or None
             items.append({
                 "type": "press_release",
                 "title": entry.get("title", ""),
                 "url": entry.get("url"),
                 "date": display_date,
                 "source": entry.get("service_name", ""),
-                "search_text": " ".join(filter(None, [title, source])),
+                "content": content,
+                "search_text": " ".join(filter(None, [title, source, (content or "").lower()])),
                 "_sort_key": display_date or "",
             })
     return items
@@ -754,6 +927,10 @@ def main():
 
     # Persist new items to per-service archive files
     persist_to_archive(all_new_items, archive_dir=DATA_DIR / "archive")
+
+    # Backfill content for any archive items that don't have it yet
+    print("\nBackfilling content for archive items without content...")
+    backfill_content(archive_dir=DATA_DIR / "archive")
 
     # Build the card feed
     build_feed(

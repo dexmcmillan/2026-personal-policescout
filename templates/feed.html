@@ -126,6 +126,40 @@
       margin-top: 3px;
     }
 
+    .card-content {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #444;
+      line-height: 1.5;
+    }
+
+    .card-content-preview {
+      white-space: pre-wrap;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }
+
+    .card-content-full {
+      white-space: pre-wrap;
+      display: none;
+    }
+
+    .card-content-toggle {
+      background: none;
+      border: none;
+      color: #4a90d9;
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 4px 0 0;
+      display: block;
+    }
+
+    .card-content-toggle:hover {
+      text-decoration: underline;
+    }
+
     .card-type-tps .card-title {
       color: #1a3a5e;
     }
@@ -245,6 +279,15 @@
 
         if (item.type === 'press_release') {
           div.className = 'card card-pr';
+          var contentHtml = '';
+          if (item.content) {
+            contentHtml =
+              '<div class="card-content">' +
+                '<div class="card-content-preview">' + esc(item.content) + '</div>' +
+                '<div class="card-content-full">' + esc(item.content) + '</div>' +
+                '<button class="card-content-toggle">Show more</button>' +
+              '</div>';
+          }
           div.innerHTML =
             '<div class="card-meta">' +
               '<span class="card-source">' + esc(item.source) + '</span>' +
@@ -254,7 +297,20 @@
               (item.url
                 ? '<a href="' + esc(item.url) + '" target="_blank" rel="noopener">' + esc(item.title) + ' →</a>'
                 : esc(item.title)) +
-            '</div>';
+            '</div>' +
+            contentHtml;
+          // Wire up expand/collapse toggle after innerHTML is set
+          if (item.content) {
+            var toggle = div.querySelector('.card-content-toggle');
+            var preview = div.querySelector('.card-content-preview');
+            var full = div.querySelector('.card-content-full');
+            toggle.addEventListener('click', function () {
+              var expanded = full.style.display === 'block';
+              preview.style.display = expanded ? '' : 'none';
+              full.style.display = expanded ? 'none' : 'block';
+              toggle.textContent = expanded ? 'Show more' : 'Show less';
+            });
+          }
         } else {
           // tps_call
           div.className = 'card card-tps card-type-tps';
