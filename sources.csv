@@ -13,7 +13,7 @@ Belleville Police Service,https://www.bellevilleps.ca/news-stories/,article h3 a
 Blood Tribe Police Service,https://www.bloodtribepolice.com/,,
 Brandon Police Service,https://www.brandon.ca/news/police-media-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
 Brantford Police Service,https://www.brantfordpolice.ca/news-and-media-releases/categories/media-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
-Bridgewater Police Department,https://www.bridgewaterpolice.ca/news-room,,
+Bridgewater Police Department,https://www.bridgewaterpolice.ca/news-room,a[href*="/news-room/"],
 Brockville Police,https://brockvillepolice.com/news/,.entry-title a,time
 Calgary Police Service,https://newsroom.calgary.ca/police-news-releases/,a.ppUnit,.pp-newsreel-list__date
 Cape Breton Regional Police,https://www.cbrps.ca/media-releases/,HEADING:div.item-content,
