@@ -294,7 +294,7 @@
 <body>
   <header>
     <h1>Police Scout</h1>
-    <p class="updated">Updated: April 09, 2026 at 17:31 UTC</p>
+    <p class="updated">Updated: April 09, 2026 at 17:38 UTC</p>
   </header>
   <div class="sources-bar">
     <details>
@@ -467,34 +467,60 @@
         }
       }
 
+      // --- Active source filter set ---
+      var activeSources = new Set();
+
+      function applyFilters() {
+        var q = searchEl.value.toLowerCase().trim();
+        var feed = document.getElementById('feed');
+        feed.innerHTML = '';
+        var visible = 0;
+
+        for (var i = 0; i < allItems.length; i++) {
+          var item = allItems[i];
+          var matchesSearch = !q || item.search_text.indexOf(q) !== -1;
+          var matchesSource = activeSources.size === 0 ||
+            activeSources.has((item.source || '').toLowerCase());
+          if (matchesSearch && matchesSource) {
+            feed.appendChild(renderCard(item));
+            visible++;
+          }
+        }
+
+        var countEl = document.getElementById('count');
+        var filtered = q || activeSources.size > 0;
+        countEl.textContent = filtered
+          ? 'Showing ' + visible + ' of ' + allItems.length
+          : allItems.length + ' items';
+
+        if (visible === 0) {
+          var empty = document.createElement('p');
+          empty.style.color = '#666';
+          empty.style.padding = '20px 0';
+          empty.textContent = 'No results.';
+          feed.appendChild(empty);
+        }
+      }
+
       // --- Live search ---
       var searchEl = document.getElementById('search');
       searchEl.addEventListener('input', function () {
-        // Clear any active source chip when typing manually
-        document.querySelectorAll('.sources-list span.active').forEach(function (el) {
-          el.classList.remove('active');
-        });
-        renderFeed(this.value);
+        applyFilters();
       });
 
       // --- Source chip filter ---
       document.querySelector('.sources-list').addEventListener('click', function (e) {
         var chip = e.target.closest('span');
         if (!chip) return;
-        var already = chip.classList.contains('active');
-        // Clear all active chips
-        document.querySelectorAll('.sources-list span.active').forEach(function (el) {
-          el.classList.remove('active');
-        });
-        if (already) {
-          // Toggle off: clear search
-          searchEl.value = '';
-          renderFeed('');
+        var name = chip.textContent.toLowerCase();
+        if (activeSources.has(name)) {
+          activeSources.delete(name);
+          chip.classList.remove('active');
         } else {
+          activeSources.add(name);
           chip.classList.add('active');
-          searchEl.value = chip.textContent;
-          renderFeed(chip.textContent);
         }
+        applyFilters();
       });
 
       // --- Load data ---
@@ -505,7 +531,7 @@
         })
         .then(function (data) {
           allItems = data;
-          renderFeed('');
+          applyFilters();
         })
         .catch(function (err) {
           document.getElementById('feed').innerHTML =
