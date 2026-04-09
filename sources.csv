@@ -28,7 +28,7 @@ Greater Sudbury Police Service,https://www.gsps.ca/Modules/News/en,h2 a[href*="n
 Guelph Police Service,https://www.guelphpolice.ca/news/media-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
 Halifax Regional Police,https://www.halifax.ca/home/news?category=25,a.c-news-updates__list-item-link,.c-news-updates__date
 Halton Regional Police Service,https://www.haltonpolice.ca/news-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
-Hamilton Police Service,https://hamiltonpolice.on.ca/news/,a.ppUnit,.pp-newsreel-list__date
+Hamilton Police Service,https://hamiltonpolice.on.ca/news/?h=1&t=media,h3.pp_bigheadlines_heading a,.pp_bigheadlines_date
 Nishnawbe-Aski Police Service,https://www.naps.ca/news/,.post-title a,
 London Police Service,https://www.londonpolice.ca/news/general-releases/,a.gs-feed-list-title,.gs-feed-list-author-date
 Ontario Provincial Police,https://www.opp.ca/news/,,

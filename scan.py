@@ -888,7 +888,10 @@ def build_feed(
     )
     print(f"  [build_feed] Wrote {data_path} ({len(all_items)} items)")
 
-    generated_at = datetime.now(timezone.utc).strftime("%B %d, %Y at %H:%M UTC")
+    from zoneinfo import ZoneInfo
+    now_et = datetime.now(ZoneInfo("America/Toronto"))
+    et_label = now_et.strftime("%Z")  # "EDT" or "EST"
+    generated_at = now_et.strftime(f"%B %d, %Y at %H:%M {et_label}")
     sources = sorted({item["source"] for item in press_items if item.get("source")})
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
     try:
