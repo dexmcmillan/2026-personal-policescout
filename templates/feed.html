@@ -211,6 +211,17 @@
       padding: 2px 7px;
       font-size: 0.78rem;
       color: #333;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sources-list span:hover {
+      background: #d0dff0;
+    }
+
+    .sources-list span.active {
+      background: #1a1a8e;
+      color: #fff;
     }
 
     .about-bar {
@@ -457,8 +468,33 @@
       }
 
       // --- Live search ---
-      document.getElementById('search').addEventListener('input', function () {
+      var searchEl = document.getElementById('search');
+      searchEl.addEventListener('input', function () {
+        // Clear any active source chip when typing manually
+        document.querySelectorAll('.sources-list span.active').forEach(function (el) {
+          el.classList.remove('active');
+        });
         renderFeed(this.value);
+      });
+
+      // --- Source chip filter ---
+      document.querySelector('.sources-list').addEventListener('click', function (e) {
+        var chip = e.target.closest('span');
+        if (!chip) return;
+        var already = chip.classList.contains('active');
+        // Clear all active chips
+        document.querySelectorAll('.sources-list span.active').forEach(function (el) {
+          el.classList.remove('active');
+        });
+        if (already) {
+          // Toggle off: clear search
+          searchEl.value = '';
+          renderFeed('');
+        } else {
+          chip.classList.add('active');
+          searchEl.value = chip.textContent;
+          renderFeed(chip.textContent);
+        }
       });
 
       // --- Load data ---
