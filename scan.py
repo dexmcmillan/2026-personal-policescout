@@ -1401,7 +1401,10 @@ def _append_to_archive(service_name: str, items: list[dict]) -> None:
             existing = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             existing = []
-    existing.extend(items)
+    # Dedup by title: skip incoming items whose title already exists in the archive
+    existing_titles = {i.get("title", "") for i in existing}
+    new_items = [i for i in items if i.get("title", "") not in existing_titles]
+    existing.extend(new_items)
     path.write_text(json.dumps(existing, ensure_ascii=False), encoding="utf-8")
 
 
