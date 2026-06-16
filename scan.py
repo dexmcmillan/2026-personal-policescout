@@ -743,6 +743,10 @@ def fetch_tps_items() -> list[dict]:
 OPP_API_URL = "https://www.opp.ca/protonapi/entry/list/"
 OPP_NEWS_BASE = "https://www.opp.ca/news/viewnews/"
 
+OPPNEWS_API_BASE = "https://oppnews.ca/api/articles/search/1/200"
+OPPNEWS_ARTICLE_BASE = "https://oppnews.ca/#!/article/"
+OPPNEWS_SESSION_FILE = Path("opp_session_id.txt")
+
 RCMP_NEWS_URL = "https://rcmp.ca/en/news"
 
 VPD_API_URL = "https://vpd.ca/wp-json/wp/v2/posts"
@@ -887,6 +891,73 @@ def fetch_opp_items(limit: int = 200) -> list[dict]:
         results.append({
             "title": title,
             "url": OPP_NEWS_BASE + entry_id,
+            "date": date_str,
+            "content": content,
+        })
+    return results
+
+
+def fetch_oppnews_items() -> list[dict]:
+    """Fetch OPP press releases from oppnews.ca authenticated API.
+
+    Requires opp_session_id.txt in the project root. Returns an empty list
+    silently if the file is missing or if the session has expired.
+    """
+    import json as _json
+    import re as _re
+    from datetime import datetime as _dt
+
+    if not OPPNEWS_SESSION_FILE.exists():
+        return []
+    session_id = OPPNEWS_SESSION_FILE.read_text().strip()
+    if not session_id:
+        return []
+
+    payload = {
+        "displaydate": _dt.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "regionid": 0,
+        "subscriptions": 1,
+        "categoryid": 0,
+    }
+    try:
+        resp = requests.post(
+            OPPNEWS_API_BASE,
+            json=payload,
+            timeout=20,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json, text/plain, */*",
+                "Origin": "https://oppnews.ca",
+                "Referer": "https://oppnews.ca/search",
+            },
+            cookies={"session_id": session_id},
+            verify=False,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return []
+
+    if isinstance(data, dict):
+        return []
+
+    results = []
+    for article in data:
+        news_id = article.get("newsid")
+        title = (article.get("title") or "").strip()
+        if not news_id or not title:
+            continue
+        date_str = article.get("displaydate") or None
+        raw_html = article.get("body") or ""
+        content = None
+        if raw_html:
+            text = BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
+            text = _re.sub(r"\n{3,}", "\n\n", text)
+            if len(text) > 50:
+                content = text
+        results.append({
+            "title": title,
+            "url": OPPNEWS_ARTICLE_BASE + str(news_id),
             "date": date_str,
             "content": content,
         })
@@ -1184,6 +1255,7 @@ def scrape_site(
             raw_links = fetch_tps_items()
         elif "opp.ca" in url:
             raw_links = fetch_opp_items()
+            raw_links.extend(fetch_oppnews_items())
         elif "rcmp.ca" in url:
             raw_links = fetch_rcmp_items()
         elif "vpd.ca" in url:
@@ -1427,6 +1499,7 @@ def main():
     all_scraped: list[dict] = []
     failed_services: list[str] = []
 
+    scrape_counts: dict[str, int] = {}
     for source in sources:
         print(f"  Scraping {source['name']}...", end=" ")
         items, error = scrape_site(
@@ -1438,8 +1511,11 @@ def main():
         if error:
             print(f"FAILED: {error}")
             failed_services.append(source["name"])
+            scrape_counts[source["name"]] = 0
             continue
-        print(f"{len(items)} links found")
+        n = len(items)
+        print(f"{n} links found" + (" [ZERO — possible scrape issue]" if n == 0 else ""))
+        scrape_counts[source["name"]] = n
         all_scraped.extend(items)
 
     # Dedup against seen hashes
@@ -1491,6 +1567,24 @@ def main():
     seen = prune_state(seen, today_utc)
     _save_seen_items(seen)
     print(f"Inserted {len(to_insert)} new items")
+
+    # Per-service new-item summary
+    print("\n── New releases by service ──")
+    all_service_names = sorted(scrape_counts.keys())
+    for name in all_service_names:
+        n_new = len(by_service.get(name, []))
+        n_scraped = scrape_counts.get(name, 0)
+        if n_new > 0:
+            status = f"+{n_new}"
+        elif name in failed_services:
+            status = "FAILED"
+        elif n_scraped == 0:
+            status = "0 links"
+        else:
+            status = "—"
+        print(f"  {name}: {status}")
+    if failed_services:
+        print(f"\nFailed ({len(failed_services)}): {', '.join(failed_services)}")
 
     # Build the static feed
     build_feed(archive_dir=ARCHIVE_DIR, tps_ndjson=TPS_NDJSON, output_dir=DOCS_DIR, days=365)

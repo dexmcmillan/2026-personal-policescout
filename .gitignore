@@ -2,3 +2,4 @@ __pycache__/
 *.py[oc]
 .venv/
 facebook_api_token.txt
+opp_session_id.txt
