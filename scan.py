@@ -26,7 +26,6 @@ TEMPLATE_DIR = BASE_DIR / "templates"
 SOURCES_FILE = BASE_DIR / "sources.csv"
 DATA_DIR = BASE_DIR / "data"
 ARCHIVE_DIR = DATA_DIR / "archive"
-TPS_NDJSON = DATA_DIR / "tps_calls.ndjson"
 SEEN_ITEMS_FILE = DATA_DIR / "seen_items.json"
 
 USER_AGENT = (
@@ -1308,12 +1307,11 @@ def scrape_site(
 
 def build_feed(
     archive_dir: Path,
-    tps_ndjson: Path,
     output_dir: Path,
     days: int = 365,
 ) -> None:
     """
-    Build the card feed from JSON archive files and TPS NDJSON.
+    Build the card feed from JSON archive files.
     Writes docs/data.json and docs/index.html.
     """
     cutoff = (date.today() - timedelta(days=days)).isoformat()
@@ -1352,47 +1350,7 @@ def build_feed(
                 })
     print(f"  [build_feed] Press releases in window: {len(press_items)}")
 
-    # Load TPS calls from NDJSON
-    tps_items = []
-    if tps_ndjson.exists():
-        for line in tps_ndjson.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            occurred_at = rec.get("occurred_at")
-            if not occurred_at:
-                continue
-            rec_date = occurred_at[:10]
-            if rec_date < cutoff:
-                continue
-            tps_items.append({
-                "type": "tps_call",
-                "title": rec.get("call_type") or "",
-                "call_type": rec.get("call_type") or "",
-                "url": None,
-                "date": rec_date,
-                "occurred_at": occurred_at,
-                "source": "Toronto Police Service",
-                "division": rec.get("division") or "",
-                "cross_streets": rec.get("cross_streets") or "",
-                "search_text": " ".join(
-                    s.lower()
-                    for s in [
-                        rec.get("call_type") or "",
-                        rec.get("division") or "",
-                        rec.get("cross_streets") or "",
-                    ]
-                    if s
-                ),
-                "_sort_key": occurred_at,
-            })
-    print(f"  [build_feed] TPS calls in window: {len(tps_items)}")
-
-    all_items = sorted(press_items + tps_items, key=lambda x: x["_sort_key"], reverse=True)
+    all_items = sorted(press_items, key=lambda x: x["_sort_key"], reverse=True)
     for item in all_items:
         item.pop("_sort_key", None)
 
@@ -1587,7 +1545,7 @@ def main():
         print(f"\nFailed ({len(failed_services)}): {', '.join(failed_services)}")
 
     # Build the static feed
-    build_feed(archive_dir=ARCHIVE_DIR, tps_ndjson=TPS_NDJSON, output_dir=DOCS_DIR, days=365)
+    build_feed(archive_dir=ARCHIVE_DIR, output_dir=DOCS_DIR, days=365)
     print("Done.")
 
 
